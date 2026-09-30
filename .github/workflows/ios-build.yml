@@ -1,0 +1,60 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Compile iOS App (Compose Multiplatform)
+    runs-on: macos-14
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Compile Kotlin iOS Framework
+        run: ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64 --stacktrace
+
+      - name: Build iOS App with xcodebuild
+        run: |
+          xcodebuild -project iosApp/iosApp.xcodeproj \
+                     -scheme iosApp \
+                     -configuration Debug \
+                     -destination 'generic/platform=iOS Simulator' \
+                     -derivedDataPath build/derivedData \
+                     CODE_SIGNING_ALLOWED=NO \
+                     CODE_SIGNING_REQUIRED=NO \
+                     build
+
+      - name: Package iOS App for Simulator
+        run: |
+          cd build/derivedData/Build/Products/Debug-iphonesimulator
+          zip -r ../../../../MeduzaAnime-iOS-Simulator.zip iosApp.app
+          cd ../../../..
+          ls -lh MeduzaAnime-iOS-Simulator.zip
+
+      - name: Upload iOS Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeduzaAnime-iOS-Simulator
+          path: MeduzaAnime-iOS-Simulator.zip
+          retention-days: 14

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary_cyan">#00E5BE</color>
+    <color name="primary_variant">#00B894</color>
+    <color name="background_dark">#0F1015</color>
+    <color name="surface_dark">#16171F</color>
+    <color name="card_dark">#1F222E</color>
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_gray">#9E9E9E</color>
+    <color name="badge_series">#FF4D4D</color>
+    <color name="badge_movie">#00E5BE</color>
+</resources>
