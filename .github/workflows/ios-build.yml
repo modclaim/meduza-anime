@@ -48,8 +48,8 @@ jobs:
       - name: Package iOS App for Simulator
         run: |
           cd build/derivedData/Build/Products/Debug-iphonesimulator
-          zip -r ../../../../MeduzaAnime-iOS-Simulator.zip iosApp.app
-          cd ../../../..
+          zip -r "$GITHUB_WORKSPACE/MeduzaAnime-iOS-Simulator.zip" iosApp.app
+          cd "$GITHUB_WORKSPACE"
           ls -lh MeduzaAnime-iOS-Simulator.zip
 
       - name: Upload iOS Build Artifact
