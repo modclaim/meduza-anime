@@ -99,7 +99,7 @@ fun ProfileAuthScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Nexa ID (Logto) bilan bog'lanilmoqda...",
+                                text = "Nexa ID bilan bog'lanilmoqda...",
                                 color = MeduzaTextWhite,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -181,7 +181,7 @@ fun ProfileAuthScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Nexa ID (Logto)",
+                                        text = "Nexa ID",
                                         color = MeduzaTextWhite,
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold
@@ -240,7 +240,7 @@ fun ProfileAuthScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = MeduzaCyan)
                             ) {
                                 Text(
-                                    text = "Logto orqali kirish",
+                                    text = "Nexa ID orqali kirish",
                                     color = Color.Black,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
@@ -311,7 +311,7 @@ fun ProfileAuthScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "Faol seans (Logto OIDC)",
+                                            text = "Faol seans (Nexa ID OIDC)",
                                             color = Color(0xFF00E676),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium

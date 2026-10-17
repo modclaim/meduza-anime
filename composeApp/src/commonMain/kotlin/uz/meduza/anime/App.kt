@@ -156,7 +156,7 @@ fun App() {
                                     .padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = "🔑 Logto Kirish",
+                                    text = "🔑 Nexa ID Kirish",
                                     color = MeduzaGold,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
