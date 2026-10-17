@@ -9,7 +9,7 @@ on:
 
 jobs:
   build-android:
-    name: Build Android APK
+    name: Build Android APK & AAB
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -29,12 +29,36 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Assemble Debug APK
-        run: ./gradlew :app:assembleDebug :composeApp:assembleDebug --stacktrace
+      - name: Configure Keystore
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > keystore/meduza.jks
+          cat <<EOF > keystore.properties
+          storeFile=keystore/meduza.jks
+          storePassword=$RELEASE_STORE_PASSWORD
+          keyAlias=$RELEASE_KEY_ALIAS
+          keyPassword=$RELEASE_KEY_PASSWORD
+          EOF
 
-      - name: Upload Android APK Artifact
+      - name: Build Android Release APK and AAB
+        run: ./gradlew :app:assembleRelease :app:bundleRelease :composeApp:assembleDebug --stacktrace
+
+      - name: Upload Android Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeduzaAnime-Android-Debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: MeduzaAnime-Release-APK
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 14
+
+      - name: Upload Android Release AAB (Google Play)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeduzaAnime-Release-AAB
+          path: app/build/outputs/bundle/release/*.aab
           retention-days: 14
