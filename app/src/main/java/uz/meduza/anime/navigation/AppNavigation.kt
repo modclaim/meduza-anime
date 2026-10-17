@@ -97,10 +97,16 @@ fun AppNavigation() {
                     )
                 }
 
-                // Auth Routes (1-click Nexa ID authentication)
+                // Auth Routes (1-click Nexa ID authentication + Guest Mode)
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onLoginSuccess = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onContinueAsGuest = {
                             navController.navigate(Screen.Home.route) {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                                 launchSingleTop = true

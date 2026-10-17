@@ -804,7 +804,7 @@ fun PaymentModalDialog(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "inPAY to'lov tizimi (Click, Payme, Uzcard, Humo)",
+                    text = "Meduza Premium Rasmiy Obuna",
                     color = PrimaryCyan,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -1017,7 +1017,7 @@ fun PaymentModalDialog(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Yuklanmoqda...")
                 } else {
-                    Text("inPAY orqali to'lash", fontWeight = FontWeight.Bold)
+                    Text("Obunani faollashtirish", fontWeight = FontWeight.Bold)
                 }
             }
         },
