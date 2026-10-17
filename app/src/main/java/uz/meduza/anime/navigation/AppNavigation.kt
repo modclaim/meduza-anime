@@ -97,7 +97,7 @@ fun AppNavigation() {
                     )
                 }
 
-                // Auth Routes
+                // Auth Routes (1-click Nexa ID authentication)
                 composable(Screen.Login.route) {
                     LoginScreen(
                         onLoginSuccess = {
@@ -105,25 +105,17 @@ fun AppNavigation() {
                                 popUpTo(Screen.Login.route) { inclusive = true }
                                 launchSingleTop = true
                             }
-                        },
-                        onNavigateToRegister = {
-                            navController.navigate(Screen.Register.route)
                         }
                     )
                 }
 
                 composable(Screen.Register.route) {
-                    RegisterScreen(
-                        onRegisterSuccess = {
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        },
-                        onNavigateToLogin = {
-                            navController.popBackStack()
+                    // Manual register removed — direct to Nexa ID login
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(Screen.Register.route) { inclusive = true }
                         }
-                    )
+                    }
                 }
 
                 // Main Bottom Tabs

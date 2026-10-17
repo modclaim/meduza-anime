@@ -19,9 +19,34 @@ data class AuthUiState(
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AuthRepository(application)
+    private val authManager = uz.meduza.anime.core.auth.AuthManager()
 
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    fun signInWithNexa() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            val nexaResult = authManager.signIn()
+            nexaResult.fold(
+                onSuccess = { tokens ->
+                    val userInfo = (authManager.authState.value as? uz.meduza.anime.core.auth.model.AuthState.Authenticated)?.user
+                    val backendResult = repository.loginWithNexa(tokens, userInfo)
+                    backendResult.fold(
+                        onSuccess = { data ->
+                            _uiState.value = AuthUiState(isSuccess = true, authData = data)
+                        },
+                        onFailure = { error ->
+                            _uiState.value = AuthUiState(errorMessage = error.message ?: "Serverga ulanishda xatolik")
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = AuthUiState(errorMessage = error.message ?: "Nexa ID orqali kirish bekor qilindi yoki xatolik yuz berdi")
+                }
+            )
+        }
+    }
 
     fun login(loginText: String, passText: String) {
         if (loginText.isBlank() || passText.isBlank()) {

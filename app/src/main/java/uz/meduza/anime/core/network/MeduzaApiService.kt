@@ -7,6 +7,9 @@ import uz.meduza.anime.data.models.*
 interface MeduzaApiService {
 
     // ==================== AUTH ====================
+    @POST("auth/nexa")
+    suspend fun loginWithNexa(@Body request: NexaAuthRequest): Response<ApiResponse<AuthData>>
+
     @POST("auth/register")
     suspend fun register(@Body request: RegisterRequest): Response<ApiResponse<AuthData>>
 

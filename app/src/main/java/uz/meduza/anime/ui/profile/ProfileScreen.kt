@@ -154,7 +154,28 @@ fun ProfileScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                // Nexa ID Account Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = null,
+                        tint = PrimaryCyan,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Nexa ID bilan himoyalangan",
+                        fontSize = 11.sp,
+                        color = PrimaryCyan,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Premium Banner / Card
                 Card(

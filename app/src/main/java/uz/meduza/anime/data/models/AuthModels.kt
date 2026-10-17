@@ -2,6 +2,16 @@ package uz.meduza.anime.data.models
 
 import com.google.gson.annotations.SerializedName
 
+data class NexaAuthRequest(
+    @SerializedName("nexaId") val nexaId: String? = null,
+    @SerializedName("email") val email: String? = null,
+    @SerializedName("username") val username: String? = null,
+    @SerializedName("avatar") val avatar: String? = null,
+    @SerializedName("token") val token: String? = null,
+    @SerializedName("idToken") val idToken: String? = null,
+    @SerializedName("deviceName") val deviceName: String? = null
+)
+
 data class LoginRequest(
     @SerializedName("login") val login: String,
     @SerializedName("password") val password: String,

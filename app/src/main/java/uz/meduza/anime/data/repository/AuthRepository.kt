@@ -13,6 +13,47 @@ class AuthRepository(private val context: Context) {
     private val api: MeduzaApiService = ApiClient.getService(context)
     private val sessionManager = SessionManager.getInstance(context)
 
+    suspend fun loginWithNexa(
+        tokens: uz.meduza.anime.core.auth.model.AuthTokens,
+        userInfo: uz.meduza.anime.core.auth.model.UserInfo?
+    ): Result<AuthData> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
+            val request = NexaAuthRequest(
+                nexaId = userInfo?.sub,
+                email = userInfo?.email,
+                username = userInfo?.username ?: userInfo?.name ?: userInfo?.displayName,
+                avatar = userInfo?.picture ?: userInfo?.avatar,
+                token = tokens.accessToken,
+                idToken = tokens.idToken,
+                deviceName = deviceName
+            )
+            val response = api.loginWithNexa(request)
+            if (response.isSuccessful && response.body()?.success == true) {
+                val authData = response.body()!!.data!!
+                sessionManager.saveSession(
+                    accessToken = authData.tokens.accessToken,
+                    refreshToken = authData.tokens.refreshToken,
+                    userId = authData.user.id,
+                    username = authData.user.username,
+                    email = authData.user.email,
+                    isPremium = authData.user.isPremium,
+                    role = authData.user.role,
+                    avatar = authData.user.avatar
+                )
+                CacheManager.clearAllMemory()
+                CacheManager.invalidateAll()
+                uz.meduza.anime.core.sync.SyncWorker.scheduleOnce(context)
+                Result.success(authData)
+            } else {
+                Result.failure(Exception(parseErrorMessage(response, "Nexa ID orqali kirishda xatolik (${response.code()})")))
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
+            Result.failure(e)
+        }
+    }
+
     suspend fun login(login: String, password: String): Result<AuthData> = withContext(Dispatchers.IO) {
         return@withContext try {
             val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
@@ -79,6 +120,11 @@ class AuthRepository(private val context: Context) {
         val refreshToken = sessionManager.getRefreshTokenSync()
         if (!refreshToken.isNullOrBlank()) {
             runCatching { api.logout(RefreshTokenRequest(refreshToken)) }
+        }
+        // Nexa Logto session tozalash
+        runCatching {
+            val authManager = uz.meduza.anime.core.auth.AuthManager()
+            authManager.signOut(launchBrowserEndSession = false)
         }
         // Session va cache tozalash
         sessionManager.clearSession()
