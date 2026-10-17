@@ -11,11 +11,11 @@ class AuthInterceptor(private val sessionManager: SessionManager) : Interceptor 
         val token = sessionManager.getAccessTokenSync()
 
         if (!token.isNullOrEmpty()) {
-            requestBuilder.addHeader("Authorization", "Bearer $token")
+            requestBuilder.header("Authorization", "Bearer $token")
         }
 
         requestBuilder.addHeader("Accept", "application/json")
-        requestBuilder.addHeader("Content-Type", "application/json")
+        if (chain.request().body != null && chain.request().header("Content-Type") == null) requestBuilder.header("Content-Type", "application/json")
 
         val deviceName = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
         requestBuilder.addHeader("X-Device-Name", deviceName)

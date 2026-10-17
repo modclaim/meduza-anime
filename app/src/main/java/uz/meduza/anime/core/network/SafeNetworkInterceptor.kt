@@ -26,7 +26,7 @@ class SafeNetworkInterceptor : Interceptor {
 
         return try {
             chain.proceed(request)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             Timber.w(e, "SafeNetworkInterceptor: Tarmoq so'rovi muvaffaqiyatsiz bo'ldi [%s]", request.url)
 
             val errorMessage = when (e) {
@@ -34,18 +34,15 @@ class SafeNetworkInterceptor : Interceptor {
                 is SocketTimeoutException -> "Server javob berish vaqti tugadi. Qayta urinib ko'ring."
                 is ConnectException -> "Serverga ulanish imkoni bo'lmadi."
                 is SSLException -> "Xavfsiz ulanishda (SSL) xatolik yuz berdi."
-                is IOException -> "Tarmoq bilan aloqa uzildi."
-                else -> e.message ?: "Kutilmagan tarmoq xatoligi"
+                else -> "Tarmoq bilan aloqa uzildi."
             }
 
-            val fallbackJson = """
-                {
-                    "success": false,
-                    "message": "$errorMessage",
-                    "data": null,
-                    "error": "${e.javaClass.simpleName}"
-                }
-            """.trimIndent()
+            val fallbackJson = org.json.JSONObject().apply {
+                put("success", false)
+                put("message", errorMessage)
+                put("data", org.json.JSONObject.NULL)
+                put("error", e.javaClass.simpleName)
+            }.toString()
 
             Response.Builder()
                 .request(request)

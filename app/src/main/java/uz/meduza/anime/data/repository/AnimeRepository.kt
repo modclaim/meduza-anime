@@ -61,6 +61,7 @@ class AnimeRepository(context: Context) {
                 else Result.failure(Exception(response.body()?.message ?: "Trending animelarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Tarmoq yo'q — cache dan qaytarish
             val fallback = animeDao.getTrendingAnimes(limit).first().map { it.toDto(gson) }
             if (fallback.isNotEmpty()) Result.success(fallback)
@@ -98,6 +99,7 @@ class AnimeRepository(context: Context) {
                 else Result.failure(Exception(response.body()?.message ?: "Yangi animelarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             val fallback = animeDao.getCachedAnimes(limit).first().map { it.toDto(gson) }
             if (fallback.isNotEmpty()) Result.success(fallback)
             else Result.failure(e)
@@ -140,6 +142,7 @@ class AnimeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Animelarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             if (page == 1 && genre == null && status == null && type == null) {
                 val cached = animeDao.getCachedAnimes(limit).first().map { it.toDto(gson) }
                 if (cached.isNotEmpty()) return@withContext Result.success(cached)
@@ -182,6 +185,7 @@ class AnimeRepository(context: Context) {
                 else Result.failure(Exception(response.body()?.message ?: "Anime topilmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             val cached = animeDao.getAnimeBySlug(slug)
             if (cached != null) Result.success(cached.toDto(gson))
             else Result.failure(e)
@@ -212,6 +216,7 @@ class AnimeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Qidiruv muvaffaqiyatsiz"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -234,6 +239,7 @@ class AnimeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Janrlarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -250,6 +256,7 @@ class AnimeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Baho saqlab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -283,6 +290,7 @@ private fun AnimeEntity.toDto(gson: Gson): AnimeDto {
     val genres: List<GenreDto> = try {
         gson.fromJson(this.genresJson, genreType) ?: emptyList()
     } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
         emptyList()
     }
     return AnimeDto(

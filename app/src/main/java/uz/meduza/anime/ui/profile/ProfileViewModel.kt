@@ -72,59 +72,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             result.fold(
                 onSuccess = { plans ->
                     _uiState.value = _uiState.value.copy(
-                        plans = if (plans.isNotEmpty()) plans else defaultPlans(),
+                        plans = plans,
                         isLoadingPlans = false
                     )
                 },
                 onFailure = {
                     _uiState.value = _uiState.value.copy(
-                        plans = defaultPlans(),
+                        plans = emptyList(),
+                        errorMessage = "Tariflarni yuklab bo‘lmadi. Qayta urinib ko‘ring.",
                         isLoadingPlans = false
                     )
                 }
             )
         }
-    }
-
-    private fun defaultPlans(): List<PaymentPlanDto> {
-        return listOf(
-            PaymentPlanDto(
-                planType = "1_MONTH",
-                title = "1 Oylik Premium",
-                days = 30,
-                price = 25000,
-                currency = "UZS",
-                discount = null,
-                description = "1080p FHD sifat, barcha qismlar, reklamasiz"
-            ),
-            PaymentPlanDto(
-                planType = "3_MONTHS",
-                title = "3 Oylik Premium",
-                days = 90,
-                price = 70000,
-                currency = "UZS",
-                discount = "7% chegirma",
-                description = "3 oy cheklovlarsiz tomosha va to'liq kirish"
-            ),
-            PaymentPlanDto(
-                planType = "6_MONTHS",
-                title = "6 Oylik Premium",
-                days = 180,
-                price = 130000,
-                currency = "UZS",
-                discount = "13% chegirma",
-                description = "Yarim yillik qulay obuna va yangi premyeralar"
-            ),
-            PaymentPlanDto(
-                planType = "12_MONTHS",
-                title = "1 Yillik VIP Premium",
-                days = 365,
-                price = 230000,
-                currency = "UZS",
-                discount = "23% chegirma",
-                description = "1 yil to'liq VIP obuna, erta premyeralar va eksklyuziv sifat"
-            )
-        )
     }
 
     fun createPayment(planType: String, onInvoiceReady: (payUrl: String, orderId: String) -> Unit) {

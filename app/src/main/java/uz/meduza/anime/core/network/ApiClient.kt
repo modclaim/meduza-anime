@@ -26,7 +26,8 @@ object ApiClient {
         val sessionManager = SessionManager.getInstance(context)
 
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (uz.meduza.anime.BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
+            redactHeader("Authorization")
         }
 
         val gson = com.google.gson.GsonBuilder()

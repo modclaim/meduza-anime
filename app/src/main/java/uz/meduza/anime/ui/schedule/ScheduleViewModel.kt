@@ -10,12 +10,11 @@ import kotlinx.coroutines.launch
 import uz.meduza.anime.data.models.*
 import uz.meduza.anime.data.repository.ScheduleRepository
 
-fun getTodayDayOfWeek(): String {
-    return try {
-        java.time.LocalDate.now().dayOfWeek.name
-    } catch (_: Exception) {
-        "SATURDAY"
-    }
+fun getTodayDayOfWeek(nowMillis: Long = System.currentTimeMillis()): String {
+    val days = arrayOf("SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY")
+    val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Tashkent"))
+    calendar.timeInMillis = nowMillis
+    return days[calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1]
 }
 
 data class ScheduleUiState(
@@ -49,7 +48,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     fun loadSchedule() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = scheduleRepo.getWeeklySchedule()
             result.fold(
                 onSuccess = { data ->

@@ -1,3 +1,6 @@
+import java.util.Properties
+
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
+
+val signingProperties = Properties().apply {
+    val signingFile = rootProject.file("keystore.properties")
+    if (signingFile.exists()) signingFile.inputStream().use { load(it) }
+}
+
 
 android {
     namespace = "uz.meduza.anime"
@@ -14,18 +23,18 @@ android {
         applicationId = "uz.meduza.anime"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("../keystore/meduza.jks")
-            storePassword = "meduzaanime123"
-            keyAlias = "meduza"
-            keyPassword = "meduzaanime123"
+            storeFile = signingProperties.getProperty("storeFile")?.let { rootProject.file(it) }
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
         }
     }
 
@@ -42,7 +51,7 @@ android {
             }
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            // Use the standard debug keystore.
         }
     }
     compileOptions {
@@ -54,11 +63,12 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {
-        abortOnError = false
-        checkReleaseBuilds = false
+        abortOnError = true
+        checkReleaseBuilds = true
         explainIssues = true
         showAll = true
         textReport = true
@@ -89,6 +99,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation(libs.timber)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -138,6 +149,9 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Kotlin Multiplatform Shared Auth & UI
+    implementation(project(":composeApp"))
 
     debugImplementation(libs.androidx.ui.tooling)
 }

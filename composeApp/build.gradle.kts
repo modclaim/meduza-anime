@@ -38,12 +38,26 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
+
+            // Ktor Client for KMP OIDC
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation(libs.ktor.client.auth)
+            implementation(libs.ktor.client.logging)
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.activity.compose)
+
+            // Android HTTP engine, EncryptedSharedPreferences, Custom Tabs
+            implementation(libs.ktor.client.okhttp)
+            implementation(libs.androidx.security.crypto)
+            implementation(libs.androidx.browser)
         }
         iosMain.dependencies {
+            // iOS Darwin HTTP engine
+            implementation(libs.ktor.client.darwin)
         }
     }
 }

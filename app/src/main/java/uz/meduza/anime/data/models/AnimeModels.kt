@@ -63,7 +63,7 @@ data class DubSummaryDto(
 
 data class UserInteractionDto(
     @SerializedName("bookmarkStatus") val bookmarkStatus: String? = null,
-    @SerializedName("rating") val rating: Int? = null
+    @SerializedName(value = "userRating", alternate = ["rating"]) val rating: Int? = null
 )
 
 data class RateAnimeRequest(

@@ -329,8 +329,8 @@ fun RegisterScreen(
                                             )
                                             setBackgroundColor(android.graphics.Color.parseColor("#0B0F17"))
                                             settings.apply {
-                                                javaScriptEnabled = true
-                                                domStorageEnabled = true
+                                                javaScriptEnabled = false
+                                                domStorageEnabled = false
                                                 cacheMode = WebSettings.LOAD_DEFAULT
                                                 useWideViewPort = true
                                                 loadWithOverviewMode = true

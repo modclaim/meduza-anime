@@ -32,17 +32,16 @@ data class PlayerUiState(
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val episodeRepo = EpisodeRepository(application)
     private var progressJob: Job? = null
+    private var loadJob: Job? = null
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     fun loadEpisode(episodeId: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoading = true,
-                errorMessage = null,
-                isPremiumRestricted = false
-            )
+        loadJob?.cancel()
+        stopProgressTracking()
+        loadJob = viewModelScope.launch {
+            _uiState.value = PlayerUiState(isLoading = true)
 
             // Lokal xotiradan (Room DB va SharedPreferences) oxirgi ko'rilgan progressni tekshirish
             val localCache = try {

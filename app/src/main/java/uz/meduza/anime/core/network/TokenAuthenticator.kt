@@ -35,6 +35,7 @@ class TokenAuthenticator(
     }
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        if (response.request.url.encodedPath.contains("/auth/")) return null
         // Agar ikki martadan ko'p retry qilgan bo'lsa — to'xtatish
         if (responseCount(response) >= MAX_RETRY) return null
 
@@ -81,7 +82,7 @@ class TokenAuthenticator(
                     .build()
 
                 try {
-                    val refreshResponse = client.newCall(request).execute()
+                    client.newCall(request).execute().use { refreshResponse ->
 
                     if (refreshResponse.isSuccessful) {
                         val responseBody = refreshResponse.body?.string()
@@ -93,6 +94,7 @@ class TokenAuthenticator(
 
                             if (!newAccessToken.isNullOrBlank() && !newRefreshToken.isNullOrBlank()) {
                                 // Tokenlarni saqlash
+                                if (sessionManager.getRefreshTokenSync() != freshRefreshToken) return@withLock null
                                 sessionManager.updateTokens(newAccessToken, newRefreshToken)
 
                                 // Yangi token bilan asl request ni qaytarish
@@ -108,6 +110,7 @@ class TokenAuthenticator(
                         sessionManager.clearSession()
                     }
                     null
+                    }
                 } catch (e: Exception) {
                     // Tarmoq xatolik — sessiyani o'chirmaymiz
                     null

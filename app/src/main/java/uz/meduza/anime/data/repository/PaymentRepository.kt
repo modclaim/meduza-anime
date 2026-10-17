@@ -22,6 +22,7 @@ class PaymentRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Tariflarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -35,6 +36,7 @@ class PaymentRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "To'lov chekini yaratib bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -48,6 +50,7 @@ class PaymentRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "To'lov holatini tekshirib bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -61,6 +64,7 @@ class PaymentRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Test to'lovini tasdiqlab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }

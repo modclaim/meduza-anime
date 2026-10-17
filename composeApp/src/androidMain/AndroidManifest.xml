@@ -1,3 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name="uz.meduza.anime.core.auth.browser.NexaAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="uz.nexa.app"
+                    android:host="callback" />
+            </intent-filter>
+        </activity>
+        <provider
+            android:name="uz.meduza.anime.core.auth.storage.NexaAuthInitProvider"
+            android:authorities="${applicationId}.nexaauthinitprovider"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+
 </manifest>

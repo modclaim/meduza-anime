@@ -41,6 +41,7 @@ class EpisodeRepository(context: Context) {
                 else Result.failure(Exception(response.body()?.message ?: "Qismlarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             val staleCache = CacheManager.getMemory<AnimeEpisodesResponse>(memKey)
             if (staleCache != null) Result.success(staleCache)
             else Result.failure(e)
@@ -64,6 +65,7 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Qism topilmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -74,16 +76,10 @@ class EpisodeRepository(context: Context) {
      * Lekin 2 daqiqalik memory cache qo'yamiz tez-tez qayta yuklashni oldini olish uchun.
      */
     suspend fun getEpisodeStreams(episodeId: String): Result<EpisodeStreamsResponse> = withContext(Dispatchers.IO) {
-        val memKey = "streams_$episodeId"
-        CacheManager.getMemory<EpisodeStreamsResponse>(memKey)?.let {
-            return@withContext Result.success(it)
-        }
-
         return@withContext try {
             val response = api.getEpisodeStreams(episodeId)
             if (response.isSuccessful && response.body()?.success == true) {
                 val data = response.body()!!.data!!
-                CacheManager.putMemory(memKey, data, 2 * 60 * 1000L) // 2 daqiqa
                 Result.success(data)
             } else {
                 val errorMsg = response.body()?.message ?: when (response.code()) {
@@ -95,23 +91,25 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
 
     // ==================== Save Progress ====================
     suspend fun saveProgress(episodeId: String, stoppedAt: Int, duration: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        val existing = db.historyDao().getByEpisodeId(episodeId)
         // Avval lokal DB ga saqlash (offline support)
         try {
             db.historyDao().saveProgress(
                 uz.meduza.anime.data.local.entities.WatchHistoryEntity(
                     episodeId = episodeId,
-                    animeSlug = "",
-                    animeTitle = "",
-                    posterUrl = "",
-                    episodeNumber = 0,
-                    episodeTitle = "",
-                    thumbnailUrl = null,
+                    animeSlug = existing?.animeSlug ?: "",
+                    animeTitle = existing?.animeTitle ?: "",
+                    posterUrl = existing?.posterUrl ?: "",
+                    episodeNumber = existing?.episodeNumber ?: 0,
+                    episodeTitle = existing?.episodeTitle ?: "",
+                    thumbnailUrl = existing?.thumbnailUrl,
                     stoppedAt = stoppedAt,
                     duration = duration,
                     progressPercent = if (duration > 0) ((stoppedAt.toFloat() / duration) * 100).toInt() else 0,
@@ -119,6 +117,7 @@ class EpisodeRepository(context: Context) {
                 )
             )
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // DB xatolik — davom etamiz (server ga yuboramiz)
         }
 
@@ -133,6 +132,7 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Progress saqlab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Network xatolik — lokal saqlash muvaffaqiyatli bo'lgan, error qaytarmaymiz
             Result.success(Unit)
         }
@@ -155,6 +155,7 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Izohlarni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -175,6 +176,7 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Izoh qoldirib bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -188,6 +190,7 @@ class EpisodeRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Like qo'yib bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }

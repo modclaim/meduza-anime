@@ -82,9 +82,10 @@ fun VideoPlayerScreen(
     var areControlsVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
-    var hasStartedPlayback by remember { mutableStateOf(false) }
-    var showResumeDialog by remember { mutableStateOf(false) }
-    var hasPromptedResume by remember { mutableStateOf(false) }
+    var loadedEpisodeId by remember { mutableStateOf<String?>(null) }
+    var hasStartedPlayback by remember(episodeId) { mutableStateOf(false) }
+    var showResumeDialog by remember(episodeId) { mutableStateOf(false) }
+    var hasPromptedResume by remember(episodeId) { mutableStateOf(false) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
@@ -137,7 +138,7 @@ fun VideoPlayerScreen(
             .setUserAgent("MeduzaAnime/1.0.2 (Linux; Android; ExoPlayer)")
             .setConnectTimeoutMs(20_000)
             .setReadTimeoutMs(20_000)
-            .setAllowCrossProtocolRedirects(true)
+            .setAllowCrossProtocolRedirects(false)
             .setKeepPostFor302Redirects(true)
     }
 
@@ -240,7 +241,8 @@ fun VideoPlayerScreen(
         val stream = uiState.selectedStream
         val streamUrl = stream?.url ?: uiState.selectedStreamUrl
         if (!streamUrl.isNullOrEmpty()) {
-            val currentPos = exoPlayer.currentPosition.coerceAtLeast(0L)
+            val currentPos = if (loadedEpisodeId == episodeId) exoPlayer.currentPosition.coerceAtLeast(0L) else 0L
+            loadedEpisodeId = episodeId
 
             val isHls  = stream?.streamType.equals("HLS",  ignoreCase = true) || streamUrl.contains(".m3u8", ignoreCase = true)
             val isMp4  = stream?.streamType.equals("MP4",  ignoreCase = true) || streamUrl.contains(".mp4",  ignoreCase = true)
@@ -253,9 +255,7 @@ fun VideoPlayerScreen(
                 else   -> null
             }
 
-            stream?.headers?.takeIf { it.isNotEmpty() }?.let {
-                httpDataSourceFactory.setDefaultRequestProperties(it)
-            }
+            httpDataSourceFactory.setDefaultRequestProperties(stream?.headers ?: emptyMap())
 
             val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(streamUrl))
             if (mimeType != null) mediaItemBuilder.setMimeType(mimeType)
@@ -1293,9 +1293,9 @@ private fun formatPlayerTime(timeMs: Long): String {
     val hours = minutes / 60
     val remMinutes = minutes % 60
     return if (hours > 0) {
-        String.format("%02d:%02d:%02d", hours, remMinutes, seconds)
+        String.format(java.util.Locale.ROOT, "%02d:%02d:%02d", hours, remMinutes, seconds)
     } else {
-        String.format("%02d:%02d", remMinutes, seconds)
+        String.format(java.util.Locale.ROOT, "%02d:%02d", remMinutes, seconds)
     }
 }
 

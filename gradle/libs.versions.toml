@@ -20,6 +20,9 @@ gson = "2.12.1"
 timber = "5.0.1"
 ksp = "2.1.10-1.0.29"
 composeMultiplatform = "1.7.3"
+ktor = "3.0.3"
+androidxSecurity = "1.1.0-alpha06"
+androidxBrowser = "1.8.0"
 
 [libraries]
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
@@ -67,6 +70,19 @@ media3-session = { group = "androidx.media3", name = "media3-session", version.r
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
+# Ktor Client for KMP OIDC
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-auth = { group = "io.ktor", name = "ktor-client-auth", version.ref = "ktor" }
+ktor-client-logging = { group = "io.ktor", name = "ktor-client-logging", version.ref = "ktor" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-darwin = { group = "io.ktor", name = "ktor-client-darwin", version.ref = "ktor" }
+
+# Android Security & Browser for OIDC
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "androidxSecurity" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidxBrowser" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

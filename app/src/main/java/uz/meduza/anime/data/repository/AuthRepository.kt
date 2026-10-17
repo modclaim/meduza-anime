@@ -40,6 +40,7 @@ class AuthRepository(private val context: Context) {
                 Result.failure(Exception(parseErrorMessage(response, "Login yoki parol noto'g'ri (${response.code()})")))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -68,6 +69,7 @@ class AuthRepository(private val context: Context) {
                 Result.failure(Exception(parseErrorMessage(response, "Ro'yxatdan o'tishda xatolik (${response.code()})")))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -112,6 +114,7 @@ class AuthRepository(private val context: Context) {
                 defaultMessage
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             defaultMessage
         }
     }

@@ -9,7 +9,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import uz.meduza.anime.data.models.PaymentPlanDto
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -750,12 +749,7 @@ fun PaymentModalDialog(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val plans = if (uiState.plans.isNotEmpty()) uiState.plans else listOf(
-        PaymentPlanDto("1_MONTH", "1 Oylik Premium", 30, 25000, "UZS", null, "1080p FHD sifat, barcha qismlar, reklamasiz"),
-        PaymentPlanDto("3_MONTHS", "3 Oylik Premium", 90, 70000, "UZS", "7% chegirma", "3 oy cheklovlarsiz tomosha va to'liq kirish"),
-        PaymentPlanDto("6_MONTHS", "6 Oylik Premium", 180, 130000, "UZS", "13% chegirma", "Yarim yillik qulay obuna va yangi premyeralar"),
-        PaymentPlanDto("12_MONTHS", "1 Yillik VIP Premium", 365, 230000, "UZS", "23% chegirma", "1 yil to'liq VIP obuna, erta premyeralar va eksklyuziv sifat")
-    )
+    val plans = uiState.plans
     var selectedPlanType by remember { mutableStateOf(plans.firstOrNull()?.planType ?: "1_MONTH") }
     var currentOrderId by remember { mutableStateOf<String?>(null) }
     var hasOpenedBrowser by remember { mutableStateOf(false) }
@@ -845,6 +839,12 @@ fun PaymentModalDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Plans list
+                if (uiState.isLoadingPlans) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = PrimaryCyan)
+                } else if (plans.isEmpty()) {
+                    Text("Tariflar yuklanmadi. Qayta urinib ko'ring.", color = TextGray)
+                    TextButton(onClick = { viewModel.loadPaymentPlans() }) { Text("Qayta urinish") }
+                }
                 plans.forEach { plan ->
                     val isSelected = plan.planType == selectedPlanType
                     Surface(
@@ -965,23 +965,7 @@ fun PaymentModalDialog(
                             }
 
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    currentOrderId?.let { orderId ->
-                                        viewModel.simulateTestPayment(orderId) { success ->
-                                            if (success) {
-                                                Toast.makeText(context, "Premium faollashtirildi!", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = PremiumGold),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, PremiumGold.copy(alpha = 0.5f))
-                            ) {
-                                Text("⚡ Demo test orqali tasdiqlash", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
+
                         }
                     }
                 }
@@ -1003,7 +987,7 @@ fun PaymentModalDialog(
                         }
                     }
                 },
-                enabled = !uiState.isCreatingPayment,
+                enabled = !uiState.isCreatingPayment && plans.any { it.planType == selectedPlanType },
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan, contentColor = Color.Black),
                 shape = RoundedCornerShape(14.dp)
             ) {

@@ -87,6 +87,7 @@ class SessionManager(private val context: Context) {
         role: String = "USER",
         avatar: String? = null
     ) {
+        if (sharedPrefs.getString(AppConstants.KEY_USER_ID, null) != userId) clearPersonalData()
         // 1. Instant SharedPreferences write (Never lost on app restart)
         sharedPrefs.edit()
             .putString(AppConstants.KEY_ACCESS_TOKEN, accessToken)
@@ -107,7 +108,7 @@ class SessionManager(private val context: Context) {
             preferences[KEY_EMAIL] = email
             preferences[KEY_IS_PREMIUM] = isPremium
             preferences[KEY_ROLE] = role
-            if (avatar != null) preferences[KEY_AVATAR] = avatar
+            if (avatar != null) preferences[KEY_AVATAR] = avatar else preferences.remove(KEY_AVATAR)
         }
     }
 
@@ -133,10 +134,20 @@ class SessionManager(private val context: Context) {
         }
     }
 
+    private suspend fun clearPersonalData() {
+        uz.meduza.anime.core.sync.SyncWorker.cancelAll(context)
+        val db = uz.meduza.anime.data.local.MeduzaDatabase.getInstance(context)
+        db.historyDao().clearHistory()
+        db.bookmarkDao().clearAll()
+        context.getSharedPreferences("meduza_progress", Context.MODE_PRIVATE).edit().clear().apply()
+        uz.meduza.anime.data.local.CacheManager.clearAllMemory()
+        uz.meduza.anime.data.local.CacheManager.invalidateAll()
+    }
+
     suspend fun clearSession() {
-        sharedPrefs.edit().clear().apply()
-        context.dataStore.edit { preferences ->
-            preferences.clear()
+        try { clearPersonalData() } finally {
+            sharedPrefs.edit().clear().apply()
+            context.dataStore.edit { preferences -> preferences.clear() }
         }
     }
 

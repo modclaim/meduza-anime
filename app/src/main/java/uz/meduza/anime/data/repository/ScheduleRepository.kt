@@ -36,6 +36,7 @@ class ScheduleRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Jadvalni yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -56,6 +57,7 @@ class ScheduleRepository(context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Jadval yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -89,6 +91,7 @@ class LibraryRepository(private val context: Context) {
                 Result.success(localHistory.map { it.toDto() })
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Network xatolik — Room DB dan qaytarish
             val localHistory = runCatching { historyDao.getWatchHistory().first() }.getOrDefault(emptyList())
             Result.success(localHistory.map { it.toDto() })
@@ -109,6 +112,7 @@ class LibraryRepository(private val context: Context) {
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(Exception(response.body()?.message ?: "O'chirib bo'lmadi"))
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Lokal o'chirilgan, server xatolik — success qaytaramiz
             Result.success(Unit)
         }
@@ -123,6 +127,7 @@ class LibraryRepository(private val context: Context) {
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(Exception(response.body()?.message ?: "Tarixni tozalab bo'lmadi"))
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.success(Unit)
         }
     }
@@ -147,6 +152,7 @@ class LibraryRepository(private val context: Context) {
                 Result.success(localBookmarks.map { it.toDto() })
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             val localBookmarks = if (!status.isNullOrBlank()) {
                 runCatching { bookmarkDao.getBookmarksByStatus(status).first() }.getOrDefault(emptyList())
             } else {
@@ -237,6 +243,7 @@ class LibraryRepository(private val context: Context) {
                 )
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Sync xatolik — ignored
         }
     }
@@ -257,6 +264,7 @@ class LibraryRepository(private val context: Context) {
                 )
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             // Sync xatolik — ignored
         }
     }
@@ -288,6 +296,7 @@ class UserRepository(private val context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Profil yuklab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -307,6 +316,7 @@ class UserRepository(private val context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Profilni yangilab bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -323,6 +333,7 @@ class UserRepository(private val context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Premium faollashtirb bo'lmadi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -340,6 +351,7 @@ class UserRepository(private val context: Context) {
                 Result.failure(Exception(response.body()?.message ?: "Hisobni o'chirishda xatolik yuz berdi"))
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             Result.failure(e)
         }
     }
@@ -354,7 +366,7 @@ private fun WatchHistoryEntity.toDto(): WatchHistoryItemDto {
         duration = duration,
         progressPercent = progressPercent,
         isCompleted = progressPercent >= 90,
-        watchedAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault())
+        watchedAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
             .format(java.util.Date(watchedAt)),
         episode = HistoryEpisodeDto(
             id = episodeId,
@@ -378,7 +390,7 @@ private fun BookmarkEntity.toDto(): BookmarkItemDto {
     return BookmarkItemDto(
         id = animeSlug,
         status = status,
-        updatedAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.getDefault())
+        updatedAt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
             .format(java.util.Date(updatedAt)),
         anime = AnimeDto(
             id = animeSlug,

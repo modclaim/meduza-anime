@@ -1,3 +1,4 @@
+// Design preview only. The shipped iOS app loads the PWA through WKWebView.
 package uz.meduza.anime
 
 import androidx.compose.animation.AnimatedVisibility
@@ -20,6 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import uz.meduza.anime.core.auth.AuthManager
+import uz.meduza.anime.core.auth.model.AuthState
+import uz.meduza.anime.ui.auth.ProfileAuthScreen
 
 // Meduza Anime Theme Tokens
 val MeduzaBackground = Color(0xFF0F1015)
@@ -56,6 +60,8 @@ fun App() {
         )
     ) {
         val platform = remember { getPlatform() }
+        val authManager = remember { AuthManager() }
+        val authState by authManager.authState.collectAsState()
         var selectedTab by remember { mutableStateOf(0) }
 
         val sampleAnime = remember {
@@ -119,30 +125,61 @@ fun App() {
                         }
                     }
 
-                    // VIP Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MeduzaGold.copy(alpha = 0.15f))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = "⭐ VIP",
-                            color = MeduzaGold,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    // Auth / VIP Badge
+                    when (val currentAuth = authState) {
+                        is AuthState.Authenticated -> {
+                            val displayName = currentAuth.user?.name
+                                ?: currentAuth.user?.username
+                                ?: currentAuth.user?.email?.substringBefore("@")
+                                ?: "Profil"
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MeduzaCyan.copy(alpha = 0.2f))
+                                    .clickable { selectedTab = 4 }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = "👤 $displayName",
+                                    color = MeduzaCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        else -> {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MeduzaGold.copy(alpha = 0.15f))
+                                    .clickable { selectedTab = 4 }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = "🔑 Logto Kirish",
+                                    color = MeduzaGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
 
                 // Main Content
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+                if (selectedTab == 4) {
+                    ProfileAuthScreen(
+                        authManager = authManager,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                     // Hero Featured Card
                     item {
                         Box(
@@ -323,6 +360,7 @@ fun App() {
                         }
                     }
                 }
+            }
 
                 // Bottom Navigation Bar
                 Row(
