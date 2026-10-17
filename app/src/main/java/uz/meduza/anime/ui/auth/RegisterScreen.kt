@@ -350,7 +350,7 @@ fun RegisterScreen(
                                                     isWebViewLoading = false
                                                 }
                                             }
-                                            loadUrl("https://meduza.editor.voiplay.uz/privacy")
+                                            loadUrl("https://meduza.nexa.uz/privacy")
                                         }
                                     }
                                 )

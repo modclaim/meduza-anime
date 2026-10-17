@@ -5,7 +5,7 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-actual class SecureStorage() {
+actual class SecureStorage {
     private val prefs by lazy {
         val context = AndroidAuthContext.context
         val masterKey = MasterKey.Builder(context)

@@ -13,7 +13,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-actual class OAuthBrowser() {
+actual class OAuthBrowser {
 
     @OptIn(ExperimentalForeignApi::class)
     actual suspend fun openAuthSession(authUrl: String, redirectUri: String): String =

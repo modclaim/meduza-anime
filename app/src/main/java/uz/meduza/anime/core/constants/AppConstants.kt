@@ -1,8 +1,8 @@
 package uz.meduza.anime.core.constants
 
 object AppConstants {
-    // AWS Cloud Enterprise live production API endpoint (HTTPS SSL)
-    const val BASE_URL = "https://meduza.editor.voiplay.uz/api/v1/"
+    // Production API endpoint (Nexa Cloud HTTPS SSL)
+    const val BASE_URL = "https://meduza.nexa.uz/api/v1/"
 
     // Local development fallback endpoint (Android Emulator -> Host machine)
     const val LOCAL_BASE_URL = "http://10.0.2.2:5000/api/v1/"

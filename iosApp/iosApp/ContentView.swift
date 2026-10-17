@@ -5,7 +5,7 @@ import WebKit
 private let meduzaAppURL: URL = {
     let value = Bundle.main.object(forInfoDictionaryKey: "MeduzaWebAppURL") as? String
     if let value, let url = URL(string: value), url.scheme == "https", url.host != nil { return url }
-    return URL(string: "https://meduza.editor.voiplay.uz/app/")!
+    return URL(string: "https://meduza.nexa.uz/app/")!
 }()
 
 final class MeduzaWebState: ObservableObject {

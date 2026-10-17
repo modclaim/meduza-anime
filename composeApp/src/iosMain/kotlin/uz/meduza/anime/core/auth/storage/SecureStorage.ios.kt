@@ -8,7 +8,7 @@ import platform.CoreFoundation.*
 import platform.Foundation.*
 import platform.Security.*
 
-actual class SecureStorage() {
+actual class SecureStorage {
     private val serviceName = "uz.nexa.app.auth"
 
     @OptIn(ExperimentalForeignApi::class)

@@ -324,7 +324,7 @@ fun ProfileScreen(
                 ) {
                     TextButton(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://meduza.editor.voiplay.uz/privacy"))
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://meduza.nexa.uz/privacy"))
                             context.startActivity(intent)
                         }
                     ) {

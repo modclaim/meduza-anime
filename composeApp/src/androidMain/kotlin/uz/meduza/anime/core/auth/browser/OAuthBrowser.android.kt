@@ -31,7 +31,7 @@ object AndroidOAuthSessionBridge {
     }
 }
 
-actual class OAuthBrowser() {
+actual class OAuthBrowser {
     actual suspend fun openAuthSession(authUrl: String, redirectUri: String): String {
         val context = AndroidAuthContext.context
         val deferred = AndroidOAuthSessionBridge.registerPendingSession()

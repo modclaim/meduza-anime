@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>MeduzaWebAppURL</key>
-	<string>https://meduza.editor.voiplay.uz/app/</string>
+	<string>https://meduza.nexa.uz/app/</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
