@@ -1,256 +1,192 @@
 package uz.meduza.anime.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
+import uz.meduza.anime.R
 import uz.meduza.anime.core.ui.components.*
 import uz.meduza.anime.core.ui.theme.*
 import uz.meduza.anime.data.models.AnimeDto
 
 @Composable
 fun HomeScreen(
-    onAnimeClick: (slug: String, initialTab: Int) -> Unit,
-    onEpisodeClick: (episodeId: String, slug: String) -> Unit,
-    viewModel: HomeViewModel = viewModel()
+    onAnimeClick: (String, Int) -> Unit,
+    onEpisodeClick: (String, String) -> Unit,
+    onSearchClick: () -> Unit = {},
+    onScheduleClick: () -> Unit = {},
+    onPlayClick: ((String) -> Unit)? = null,
+    viewModel: HomeViewModel = viewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = BackgroundDark
+    val state by viewModel.uiState.collectAsState()
+    LazyColumn(
+        Modifier.fillMaxSize().background(BackgroundDark).statusBarsPadding(),
+        contentPadding = PaddingValues(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+        item {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(color = PrimaryCyan)
+                Image(painterResource(R.drawable.ic_meduza_logo), null, Modifier.size(32.dp))
+                Text(
+                    "MEDUZA",
+                    color = TextWhite,
+                    fontSize = 18.sp,
+                    letterSpacing = 3.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f).padding(start = 10.dp),
+                )
+                IconButton(onClick = onScheduleClick) {
+                    Icon(Icons.Outlined.CalendarToday, "Premyeralar jadvali", Modifier.size(21.dp))
+                }
+                IconButton(onClick = onSearchClick) {
+                    Icon(Icons.Outlined.Search, "Anime qidirish")
+                }
             }
-        } else if (uiState.popularAnimes.isEmpty() && uiState.latestAnimes.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = uiState.errorMessage ?: "Ma'lumotlar yuklanmadi",
-                        color = TextGray,
-                        fontSize = 14.sp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Button(
-                        onClick = { viewModel.loadHomeData() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryCyan,
-                            contentColor = Color.Black
-                        ),
-                        shape = RoundedCornerShape(10.dp)
+        }
+        if (state.isLoading && !state.hasData)
+            item {
+                Box(Modifier.fillMaxWidth().height(360.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+        else if (!state.hasData)
+            item {
+                EmptyState(
+                    "Hozircha yuklanmadi",
+                    state.errorMessage ?: "Internet aloqasini tekshiring.",
+                    actionLabel = "Qayta urinish",
+                    onAction = { viewModel.refresh() },
+                )
+            }
+        val hero = state.popularAnimes.firstOrNull() ?: state.latestAnimes.firstOrNull()
+        if (hero != null)
+            item {
+                HeroBannerCard(
+                    hero,
+                    { onPlayClick?.invoke(hero.slug) ?: onAnimeClick(hero.slug, 0) },
+                    { onAnimeClick(hero.slug, 1) },
+                )
+            }
+        if (state.continueWatchingList.isNotEmpty())
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ShelfHeading("Davom ettiring", "To‘xtagan joyingizdan")
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(text = "Qayta yuklash", fontWeight = FontWeight.Bold)
+                        items(state.continueWatchingList, key = { it.episode.id }) { item ->
+                            val ep = item.episode
+                            ContinueWatchingCard(
+                                ep.anime.title,
+                                "${ep.episodeNumber}-qism",
+                                ((item.duration - item.stoppedAt).coerceAtLeast(0) / 60),
+                                ep.thumbnailUrl ?: ep.anime.posterUrl,
+                                item.progressPercent,
+                                { onEpisodeClick(ep.id, ep.anime.slug) },
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 32.dp)
-            ) {
-                // 1. HERO BANNER SECTION (At the very top)
-                val heroAnime = uiState.popularAnimes.firstOrNull() ?: uiState.latestAnimes.firstOrNull()
-                if (heroAnime != null) {
-                    item {
-                        HeroBannerCard(
-                            anime = heroAnime,
-                            onPlayClick = { onAnimeClick(heroAnime.slug, 0) },
-                            onInfoClick = { onAnimeClick(heroAnime.slug, 1) }
-                        )
-                    }
-                }
-
-                // 2. CONTINUE WATCHING / KO'RISHDA DAVOM ETISH (If user has history)
-                if (uiState.continueWatchingList.isNotEmpty()) {
-                    item {
-                        Column(modifier = Modifier.padding(top = 20.dp)) {
-                            SectionHeader(
-                                title = "KO'RISHDA DAVOM ETISH",
-                                subtitle = "Oxirgi ko'rilgan joyidan davom eting"
+        if (state.latestAnimes.isNotEmpty())
+            item {
+                AnimeShelf(
+                    "Yangi qo‘shilgan",
+                    "Yangi hikoyalarni kashf eting",
+                    state.latestAnimes,
+                    onAnimeClick,
+                )
+            }
+        if (state.popularAnimes.isNotEmpty())
+            item {
+                AnimeShelf(
+                    "Hozir ommabop",
+                    "Tomoshabinlar tanlovi",
+                    state.popularAnimes,
+                    onAnimeClick,
+                )
+            }
+        if (state.upcomingPremieres.isNotEmpty())
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ShelfHeading("Yaqin premyeralar", "Kutishga arziydigan hikoyalar")
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(state.upcomingPremieres) { premiere ->
+                            PremiereCountdownCard(
+                                title = premiere.title,
+                                posterUrl = premiere.posterUrl,
+                                secondsRemaining = premiere.secondsRemaining,
+                                scheduledReleaseDate = premiere.scheduledReleaseDate,
+                                onClick = { onAnimeClick(premiere.slug, 1) },
                             )
-
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                items(uiState.continueWatchingList) { item ->
-                                    val episode = item.episode
-                                    val remainingMins = ((item.duration - item.stoppedAt).coerceAtLeast(0)) / 60
-                                    val seasonTitle = episode.season?.title ?: "1-Fasl"
-                                    val epText = "$seasonTitle • ${episode.episodeNumber}-qism"
-
-                                    ContinueWatchingCard(
-                                        title = episode.anime.title,
-                                        episodeText = epText,
-                                        remainingMinutes = if (remainingMins > 0) remainingMins else 1,
-                                        thumbnailUrl = episode.thumbnailUrl ?: episode.anime.posterUrl,
-                                        progressPercent = item.progressPercent,
-                                        onClick = {
-                                            onEpisodeClick(episode.id, episode.anime.slug)
-                                        }
-                                    )
-                                }
-                            }
                         }
                     }
                 }
+            }
+    }
+}
 
-                // 3. LATEST RELEASES / YANGI QO'SHILGAN VA YANGI QISMLAR
-                if (uiState.latestAnimes.isNotEmpty()) {
-                    item {
-                        Column(modifier = Modifier.padding(top = 24.dp)) {
-                            SectionHeader(
-                                title = "YANGI",
-                                subtitle = "Yangi dublyaj qilingan seriyalar"
-                            )
-
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                items(uiState.latestAnimes) { anime ->
-                                    val epsText = if (anime.type.equals("MOVIE", ignoreCase = true)) {
-                                        "Film"
-                                    } else {
-                                        "${anime.totalReleasedEpisodes} ta qism"
-                                    }
-
-                                    AnimeCard(
-                                        title = anime.title,
-                                        posterUrl = anime.posterUrl,
-                                        type = anime.type,
-                                        episodesInfo = epsText,
-                                        rating = anime.rating,
-                                        ratingCount = anime.ratingCount,
-                                        onClick = { onAnimeClick(anime.slug, 0) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 4. MOST POPULAR / ENG MASHHUR ANIMELAR
-                if (uiState.popularAnimes.isNotEmpty()) {
-                    item {
-                        Column(modifier = Modifier.padding(top = 24.dp)) {
-                            SectionHeader(
-                                title = "ENG MASHHUR ANIMELAR",
-                                subtitle = "Foydalanuvchilar tomonidan eng ko'p ko'rilgan"
-                            )
-
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                items(uiState.popularAnimes) { anime ->
-                                    val epsText = if (anime.type.equals("MOVIE", ignoreCase = true)) {
-                                        "To'liq metrajli film"
-                                    } else {
-                                        "Serial • ${anime.totalReleasedEpisodes} qism"
-                                    }
-
-                                    AnimeCard(
-                                        title = anime.title,
-                                        posterUrl = anime.posterUrl,
-                                        type = anime.type,
-                                        episodesInfo = epsText,
-                                        rating = anime.rating,
-                                        ratingCount = anime.ratingCount,
-                                        onClick = { onAnimeClick(anime.slug, 0) }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 5. UPCOMING RELEASES / KUTILAYOTGAN PREMYERALAR (Always at the very bottom)
-                if (uiState.upcomingPremieres.isNotEmpty()) {
-                    item {
-                        Column(modifier = Modifier.padding(top = 28.dp)) {
-                            SectionHeader(
-                                title = "KUTILAYOTGAN PREMYERALAR",
-                                subtitle = "Tez kunda Meduza dublyajida chiqadi"
-                            )
-
-                            LazyRow(
-                                contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                items(uiState.upcomingPremieres) { upcoming ->
-                                    PremiereCountdownCard(
-                                        title = upcoming.title,
-                                        posterUrl = upcoming.posterUrl,
-                                        secondsRemaining = upcoming.secondsRemaining,
-                                        scheduledReleaseDate = upcoming.scheduledReleaseDate,
-                                        seasonBadge = upcoming.badgeText ?: if (upcoming.type.equals("TV", ignoreCase = true)) "Yangi fasl" else "Tez kunda",
-                                        onClick = { onAnimeClick(upcoming.slug, 1) },
-                                        modifier = Modifier.width(290.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+@Composable
+private fun AnimeShelf(
+    title: String,
+    subtitle: String,
+    animes: List<AnimeDto>,
+    onClick: (String, Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        ShelfHeading(title, subtitle)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(animes, key = { it.id }) { anime ->
+                AnimeCard(
+                    anime.title,
+                    anime.posterUrl,
+                    anime.type,
+                    if (anime.type == "MOVIE") "Film" else "${anime.totalReleasedEpisodes} qism",
+                    anime.rating,
+                    anime.ratingCount,
+                    { onClick(anime.slug, 1) },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SectionHeader(
-    title: String,
-    subtitle: String? = null
-) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextWhite,
-            letterSpacing = 1.sp
-        )
-        if (subtitle != null) {
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = TextMuted,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
+private fun ShelfHeading(title: String, subtitle: String) {
+    Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = TextWhite)
+        Text(subtitle, fontSize = 12.sp, color = TextMuted)
     }
 }
 
@@ -259,147 +195,80 @@ fun HeroBannerCard(
     anime: AnimeDto,
     onPlayClick: () -> Unit,
     onInfoClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
+        modifier
+            .padding(horizontal = 16.dp)
             .fillMaxWidth()
-            .height(340.dp)
-            .clickable { onInfoClick() }
+            .height(390.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(CardDark)
     ) {
-        // Backdrop / Poster Image
         AsyncImage(
-            model = anime.bannerUrl ?: anime.posterUrl,
-            contentDescription = anime.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            anime.bannerUrl ?: anime.posterUrl,
+            anime.title,
+            Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
         )
-
-        // Gradient Vignette overlay (Top subtle dark, Bottom strong dark fade)
         Box(
-            modifier = Modifier
-                .fillMaxSize()
+            Modifier.fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.4f),
-                            Color.Transparent,
-                            BackgroundDark.copy(alpha = 0.8f),
-                            BackgroundDark
+                        listOf(
+                            Color.Black.copy(alpha = 0.1f),
+                            Color.Black.copy(alpha = 0.15f),
+                            Color(0xF20B0D11),
                         )
                     )
                 )
         )
-
-        // Hero Info & Actions at Bottom
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+            Modifier.align(Alignment.BottomStart).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Badges (Type + Dublyaj + Rating)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Type Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (anime.type.equals("MOVIE", true)) BadgeMovieCyan else BadgeSeriesRed)
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = if (anime.type.equals("MOVIE", true)) "FILM" else "SERIAL",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-
-                // Uzbek Dubbing badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(PrimaryCyan.copy(alpha = 0.2f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "O'zbekcha Dublyaj",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = PrimaryCyan
-                    )
-                }
-
-                // Rating and Vote Count
-                Text(
-                    text = "★ ${String.format(java.util.Locale.US, "%.1f", anime.rating)}" +
-                            if (anime.ratingCount > 0) " (${formatRatingCount(anime.ratingCount)})" else "",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = StarGold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Anime Title
             Text(
-                text = anime.title,
-                fontSize = 22.sp,
+                "MEDUZA TANLOVI",
+                color = PrimaryCyan,
+                fontSize = 10.sp,
+                letterSpacing = 2.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextWhite,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
             )
-
-            // Synopsis Preview
-            if (!anime.synopsis.isNullOrBlank()) {
-                Text(
-                    text = anime.synopsis,
-                    fontSize = 12.sp,
-                    color = TextMuted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Action Buttons
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Play Button
+            Text(
+                anime.title,
+                color = TextWhite,
+                fontSize = 27.sp,
+                lineHeight = 32.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                listOfNotNull(
+                        anime.year?.toString(),
+                        if (anime.type == "MOVIE") "Film" else "Serial",
+                        anime.genres.firstOrNull()?.name,
+                    )
+                    .joinToString("  ·  "),
+                color = TextGray,
+                fontSize = 12.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onPlayClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryCyan,
-                        contentColor = Color.Black
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f).height(50.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Tomosha qilish", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Icon(Icons.Default.PlayArrow, null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Tomosha qilish", fontWeight = FontWeight.SemiBold)
                 }
-
-                // Info Button
-                OutlinedButton(
+                OutlinedIconButton(
                     onClick = onInfoClick,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = TextWhite
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(50.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Info, contentDescription = "Info", modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Batafsil", fontSize = 13.sp)
+                    Icon(Icons.Outlined.Info, "Batafsil")
                 }
             }
         }

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +40,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -54,8 +58,6 @@ import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 import timber.log.Timber
 import uz.meduza.anime.core.ui.theme.*
-import uz.meduza.anime.data.models.DubTrackDto
-import uz.meduza.anime.data.models.VideoStreamDto
 import uz.meduza.anime.ui.player.components.SpeedSelectorDialog
 
 @OptIn(UnstableApi::class)
@@ -65,7 +67,7 @@ fun VideoPlayerScreen(
     animeSlug: String,
     onBackClick: () -> Unit,
     onUpgradePremiumClick: () -> Unit,
-    viewModel: PlayerViewModel = viewModel()
+    viewModel: PlayerViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -77,7 +79,8 @@ fun VideoPlayerScreen(
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var commentText by remember { mutableStateOf("") }
     var isSpoilerComment by remember { mutableStateOf(false) }
-    var isFullscreen by remember { mutableStateOf(false) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var fillVideo by rememberSaveable { mutableStateOf(true) }
 
     var areControlsVisible by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -110,7 +113,13 @@ fun VideoPlayerScreen(
                 systemBarsBehavior =
                     WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
-            win.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                win.attributes =
+                    win.attributes.apply {
+                        layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+            }
         }
     }
 
@@ -118,7 +127,7 @@ fun VideoPlayerScreen(
         isFullscreen = false
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         window?.let { win ->
-            WindowCompat.setDecorFitsSystemWindows(win, true)
+            WindowCompat.setDecorFitsSystemWindows(win, false)
             WindowInsetsControllerCompat(win, view).show(WindowInsetsCompat.Type.systemBars())
             win.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
@@ -135,28 +144,48 @@ fun VideoPlayerScreen(
     // -----------------------------------------------------------------------
     val httpDataSourceFactory = remember {
         DefaultHttpDataSource.Factory()
-            .setUserAgent("MeduzaAnime/1.0.2 (Linux; Android; ExoPlayer)")
+            .setUserAgent(
+                "MeduzaAnime/${uz.meduza.anime.BuildConfig.VERSION_NAME} (Android; Media3)"
+            )
             .setConnectTimeoutMs(20_000)
             .setReadTimeoutMs(20_000)
             .setAllowCrossProtocolRedirects(false)
             .setKeepPostFor302Redirects(true)
     }
 
-    val dataSourceFactory = remember(context, httpDataSourceFactory) {
-        DefaultDataSource.Factory(context, httpDataSourceFactory)
-    }
+    val dataSourceFactory =
+        remember(context, httpDataSourceFactory) {
+            DefaultDataSource.Factory(context, httpDataSourceFactory)
+        }
 
-    val mediaSourceFactory = remember(dataSourceFactory) {
-        DefaultMediaSourceFactory(dataSourceFactory)
-    }
+    val mediaSourceFactory =
+        remember(dataSourceFactory) {
+            DefaultMediaSourceFactory(dataSourceFactory)
+        }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+            .setHandleAudioBecomingNoisy(true)
             .setSeekForwardIncrementMs(10_000)
             .setSeekBackIncrementMs(10_000)
             .build()
             .apply { playWhenReady = false }
+    }
+
+    DisposableEffect(isPlaying) {
+        view.keepScreenOn = isPlaying
+        onDispose { view.keepScreenOn = false }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) exoPlayer.pause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Restore system bars + release player when navigating away (must be after exoPlayer remember)
@@ -164,7 +193,7 @@ fun VideoPlayerScreen(
         onDispose {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             window?.let { win ->
-                WindowCompat.setDecorFitsSystemWindows(win, true)
+                WindowCompat.setDecorFitsSystemWindows(win, false)
                 WindowInsetsControllerCompat(win, view).show(WindowInsetsCompat.Type.systemBars())
                 win.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
@@ -184,18 +213,28 @@ fun VideoPlayerScreen(
     // ExoPlayer listeners
     // -----------------------------------------------------------------------
     DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
-            override fun onPlaybackStateChanged(state: Int) {
-                isBuffering = (state == Player.STATE_BUFFERING)
-                val dur = exoPlayer.duration
-                if (dur > 0L) durationMs = dur
+        val listener =
+            object : Player.Listener {
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    isPlaying = playing
+                }
+
+                override fun onPlaybackStateChanged(state: Int) {
+                    isBuffering = (state == Player.STATE_BUFFERING)
+                    val dur = exoPlayer.duration
+                    if (dur > 0L) durationMs = dur
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    isBuffering = false
+                    Timber.e(
+                        error,
+                        "ExoPlayer error: %s (code: %d)",
+                        error.message,
+                        error.errorCode,
+                    )
+                }
             }
-            override fun onPlayerError(error: PlaybackException) {
-                isBuffering = false
-                Timber.e(error, "ExoPlayer error: %s (code: %d)", error.message, error.errorCode)
-            }
-        }
         exoPlayer.addListener(listener)
         onDispose { exoPlayer.removeListener(listener) }
     }
@@ -221,10 +260,16 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(showRewindFeedback) {
-        if (showRewindFeedback) { delay(650L); showRewindFeedback = false }
+        if (showRewindFeedback) {
+            delay(650L)
+            showRewindFeedback = false
+        }
     }
     LaunchedEffect(showForwardFeedback) {
-        if (showForwardFeedback) { delay(650L); showForwardFeedback = false }
+        if (showForwardFeedback) {
+            delay(650L)
+            showForwardFeedback = false
+        }
     }
 
     LaunchedEffect(episodeId) { viewModel.loadEpisode(episodeId) }
@@ -241,19 +286,28 @@ fun VideoPlayerScreen(
         val stream = uiState.selectedStream
         val streamUrl = stream?.url ?: uiState.selectedStreamUrl
         if (!streamUrl.isNullOrEmpty()) {
-            val currentPos = if (loadedEpisodeId == episodeId) exoPlayer.currentPosition.coerceAtLeast(0L) else 0L
+            val currentPos =
+                if (loadedEpisodeId == episodeId) exoPlayer.currentPosition.coerceAtLeast(0L)
+                else 0L
             loadedEpisodeId = episodeId
 
-            val isHls  = stream?.streamType.equals("HLS",  ignoreCase = true) || streamUrl.contains(".m3u8", ignoreCase = true)
-            val isMp4  = stream?.streamType.equals("MP4",  ignoreCase = true) || streamUrl.contains(".mp4",  ignoreCase = true)
-            val isDash = stream?.streamType.equals("DASH", ignoreCase = true) || streamUrl.contains(".mpd",  ignoreCase = true)
+            val isHls =
+                stream?.streamType.equals("HLS", ignoreCase = true) ||
+                    streamUrl.contains(".m3u8", ignoreCase = true)
+            val isMp4 =
+                stream?.streamType.equals("MP4", ignoreCase = true) ||
+                    streamUrl.contains(".mp4", ignoreCase = true)
+            val isDash =
+                stream?.streamType.equals("DASH", ignoreCase = true) ||
+                    streamUrl.contains(".mpd", ignoreCase = true)
 
-            val mimeType = when {
-                isHls  -> MimeTypes.APPLICATION_M3U8
-                isMp4  -> MimeTypes.VIDEO_MP4
-                isDash -> MimeTypes.APPLICATION_MPD
-                else   -> null
-            }
+            val mimeType =
+                when {
+                    isHls -> MimeTypes.APPLICATION_M3U8
+                    isMp4 -> MimeTypes.VIDEO_MP4
+                    isDash -> MimeTypes.APPLICATION_MPD
+                    else -> null
+                }
 
             httpDataSourceFactory.setDefaultRequestProperties(stream?.headers ?: emptyMap())
 
@@ -276,36 +330,34 @@ fun VideoPlayerScreen(
 
             viewModel.startProgressTracking(
                 episodeId = episodeId,
-                getCurrentPosition = { exoPlayer.currentPosition },
-                getDuration = { exoPlayer.duration }
+                getCurrentPosition = { if (exoPlayer.isPlaying) exoPlayer.currentPosition else 0L },
+                getDuration = { exoPlayer.duration },
             )
         }
     }
 
     LaunchedEffect(uiState.selectedDub) {
         uiState.selectedDub?.let { dub ->
-            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                .buildUpon()
-                .setPreferredAudioLanguage(dub.language.lowercase())
-                .build()
+            exoPlayer.trackSelectionParameters =
+                exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setPreferredAudioLanguage(dub.language.lowercase())
+                    .build()
         }
     }
 
     // -----------------------------------------------------------------------
     // Root layout — fills the entire screen edge-to-edge, no Scaffold
     // -----------------------------------------------------------------------
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (isFullscreen) {
             // ----------------------------------------------------------------
             // FULLSCREEN — player takes the entire window, nothing else shown
             // ----------------------------------------------------------------
             PlayerSurface(
                 exoPlayer = exoPlayer,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                fill = fillVideo,
             )
 
             PlayerGestureLayer(
@@ -313,21 +365,28 @@ fun VideoPlayerScreen(
                 onTap = { areControlsVisible = !areControlsVisible },
                 onDoubleTapLeft = {
                     val target = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                    exoPlayer.seekTo(target); currentPositionMs = target; showRewindFeedback = true
+                    exoPlayer.seekTo(target)
+                    currentPositionMs = target
+                    showRewindFeedback = true
                 },
                 onDoubleTapRight = {
                     val dur = exoPlayer.duration.coerceAtLeast(0L)
                     val target = (exoPlayer.currentPosition + 10_000L).coerceAtMost(dur)
-                    exoPlayer.seekTo(target); currentPositionMs = target; showForwardFeedback = true
-                }
+                    exoPlayer.seekTo(target)
+                    currentPositionMs = target
+                    showForwardFeedback = true
+                },
             )
 
-            SeekFeedback(showRewindFeedback = showRewindFeedback, showForwardFeedback = showForwardFeedback)
+            SeekFeedback(
+                showRewindFeedback = showRewindFeedback,
+                showForwardFeedback = showForwardFeedback,
+            )
 
             AnimatedVisibility(
                 visible = areControlsVisible && !isBuffering,
                 enter = fadeIn(tween(180)),
-                exit = fadeOut(tween(180))
+                exit = fadeOut(tween(180)),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     PlayerControlsOverlay(
@@ -340,28 +399,33 @@ fun VideoPlayerScreen(
                         currentSpeed = currentSpeed,
                         hasAudioTracks = uiState.streamsResponse?.dubs?.isNotEmpty() == true,
                         selectedQuality = uiState.selectedQuality,
-                        episodeTitle = uiState.episodeDetail?.let {
-                            "${it.episodeNumber}-qism: ${it.title}"
-                        } ?: "",
+                        episodeTitle =
+                            uiState.episodeDetail?.let {
+                                "${it.episodeNumber}-qism: ${it.title}"
+                            } ?: "",
                         onBack = { exitFullscreen() },
                         onPlayPause = {
                             if (!hasStartedPlayback) {
                                 hasStartedPlayback = true
                                 exoPlayer.playWhenReady = true
                                 exoPlayer.play()
-                            } else if (exoPlayer.isPlaying) exoPlayer.pause()
-                            else exoPlayer.play()
+                            } else if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                         },
                         onRewind = {
                             val target = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                            exoPlayer.seekTo(target); currentPositionMs = target
+                            exoPlayer.seekTo(target)
+                            currentPositionMs = target
                         },
                         onForward = {
                             val dur = exoPlayer.duration.coerceAtLeast(0L)
                             val target = (exoPlayer.currentPosition + 10_000L).coerceAtMost(dur)
-                            exoPlayer.seekTo(target); currentPositionMs = target
+                            exoPlayer.seekTo(target)
+                            currentPositionMs = target
                         },
-                        onSeekChange = { isSeeking = true; seekPositionMs = it.toLong() },
+                        onSeekChange = {
+                            isSeeking = true
+                            seekPositionMs = it.toLong()
+                        },
                         onSeekFinished = {
                             exoPlayer.seekTo(seekPositionMs)
                             currentPositionMs = seekPositionMs
@@ -370,7 +434,9 @@ fun VideoPlayerScreen(
                         onToggleFullscreen = { toggleFullscreen() },
                         onShowSpeed = { showSpeedDialog = true },
                         onShowDub = { showDubDialog = true },
-                        onShowQuality = { showQualityDialog = true }
+                        onShowQuality = { showQualityDialog = true },
+                        isVideoFilled = fillVideo,
+                        onToggleVideoFit = { fillVideo = !fillVideo },
                     )
                 }
             }
@@ -378,7 +444,11 @@ fun VideoPlayerScreen(
             // Buffering spinner — always on top, not blocked by controls
             if (isBuffering && hasStartedPlayback) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PrimaryCyan, strokeWidth = 3.dp, modifier = Modifier.size(48.dp))
+                    CircularProgressIndicator(
+                        color = PrimaryCyan,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(48.dp),
+                    )
                 }
             }
 
@@ -390,10 +460,9 @@ fun VideoPlayerScreen(
                         hasStartedPlayback = true
                         exoPlayer.playWhenReady = true
                         exoPlayer.play()
-                    }
+                    },
                 )
             }
-
         } else {
             // ----------------------------------------------------------------
             // PORTRAIT — player on top, scrollable content below
@@ -403,10 +472,7 @@ fun VideoPlayerScreen(
                 // Player surface box — delegated to a private composable so
                 // AnimatedVisibility inside it is NOT inside a ColumnScope lambda.
                 PlayerPortraitContent(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .height(220.dp),
+                    modifier = Modifier.fillMaxWidth().statusBarsPadding().aspectRatio(16f / 9f),
                     isPremiumRestricted = uiState.isPremiumRestricted,
                     isLoading = uiState.isLoading,
                     hasError = uiState.errorMessage != null && uiState.selectedStreamUrl == null,
@@ -423,9 +489,10 @@ fun VideoPlayerScreen(
                     currentSpeed = currentSpeed,
                     hasAudioTracks = uiState.streamsResponse?.dubs?.isNotEmpty() == true,
                     selectedQuality = uiState.selectedQuality,
-                    episodeTitle = uiState.episodeDetail?.let {
-                        "${it.episodeNumber}-qism: ${it.title}"
-                    } ?: "",
+                    episodeTitle =
+                        uiState.episodeDetail?.let {
+                            "${it.episodeNumber}-qism: ${it.title}"
+                        } ?: "",
                     showRewindFeedback = showRewindFeedback,
                     showForwardFeedback = showForwardFeedback,
                     onUpgrade = onUpgradePremiumClick,
@@ -433,31 +500,39 @@ fun VideoPlayerScreen(
                     onTap = { areControlsVisible = !areControlsVisible },
                     onDoubleTapLeft = {
                         val target = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                        exoPlayer.seekTo(target); currentPositionMs = target; showRewindFeedback = true
+                        exoPlayer.seekTo(target)
+                        currentPositionMs = target
+                        showRewindFeedback = true
                     },
                     onDoubleTapRight = {
                         val dur = exoPlayer.duration.coerceAtLeast(0L)
                         val target = (exoPlayer.currentPosition + 10_000L).coerceAtMost(dur)
-                        exoPlayer.seekTo(target); currentPositionMs = target; showForwardFeedback = true
+                        exoPlayer.seekTo(target)
+                        currentPositionMs = target
+                        showForwardFeedback = true
                     },
                     onPlayPause = {
                         if (!hasStartedPlayback) {
                             hasStartedPlayback = true
                             exoPlayer.playWhenReady = true
                             exoPlayer.play()
-                        } else if (exoPlayer.isPlaying) exoPlayer.pause()
-                        else exoPlayer.play()
+                        } else if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                     },
                     onRewind = {
                         val target = (exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)
-                        exoPlayer.seekTo(target); currentPositionMs = target
+                        exoPlayer.seekTo(target)
+                        currentPositionMs = target
                     },
                     onForward = {
                         val dur = exoPlayer.duration.coerceAtLeast(0L)
                         val target = (exoPlayer.currentPosition + 10_000L).coerceAtMost(dur)
-                        exoPlayer.seekTo(target); currentPositionMs = target
+                        exoPlayer.seekTo(target)
+                        currentPositionMs = target
                     },
-                    onSeekChange = { isSeeking = true; seekPositionMs = it.toLong() },
+                    onSeekChange = {
+                        isSeeking = true
+                        seekPositionMs = it.toLong()
+                    },
                     onSeekFinished = {
                         exoPlayer.seekTo(seekPositionMs)
                         currentPositionMs = seekPositionMs
@@ -471,16 +546,13 @@ fun VideoPlayerScreen(
                         hasStartedPlayback = true
                         exoPlayer.playWhenReady = true
                         exoPlayer.play()
-                    }
+                    },
                 )
 
                 // Scrollable content below player
                 LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp)
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp),
                 ) {
                     item {
                         val ep = uiState.episodeDetail
@@ -489,14 +561,14 @@ fun VideoPlayerScreen(
                                 text = "${ep.season?.title ?: "Fasl 1"} • ${ep.episodeNumber}-qism",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = PrimaryCyan
+                                color = PrimaryCyan,
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = ep.title,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = TextWhite
+                                color = TextWhite,
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             HorizontalDivider(color = DividerDark)
@@ -508,7 +580,7 @@ fun VideoPlayerScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextMuted,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                     }
@@ -517,23 +589,21 @@ fun VideoPlayerScreen(
                         var isSpoilerHidden by remember { mutableStateOf(comment.isSpoiler) }
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.Top
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.Top,
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(CardDarkElevated),
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier.size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(CardDarkElevated),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = comment.user.username.take(1).uppercase(),
                                     color = PrimaryCyan,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    fontSize = 14.sp,
                                 )
                             }
 
@@ -542,36 +612,39 @@ fun VideoPlayerScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = comment.user.username,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = TextWhite
+                                            color = TextWhite,
                                         )
                                         if (comment.user.isPremium) {
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(PremiumGold)
-                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                modifier =
+                                                    Modifier.clip(RoundedCornerShape(4.dp))
+                                                        .background(PremiumGold)
+                                                        .padding(
+                                                            horizontal = 5.dp,
+                                                            vertical = 1.dp,
+                                                        ),
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.Star,
                                                     contentDescription = "VIP",
                                                     tint = Color.Black,
-                                                    modifier = Modifier.size(10.dp)
+                                                    modifier = Modifier.size(10.dp),
                                                 )
                                                 Spacer(modifier = Modifier.width(2.dp))
                                                 Text(
                                                     text = "VIP",
                                                     color = Color.Black,
                                                     fontSize = 9.sp,
-                                                    fontWeight = FontWeight.ExtraBold
+                                                    fontWeight = FontWeight.ExtraBold,
                                                 )
                                             }
                                         }
@@ -579,16 +652,27 @@ fun VideoPlayerScreen(
 
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.clickable { viewModel.toggleCommentLike(comment.id) }
+                                        modifier =
+                                            Modifier.clickable {
+                                                viewModel.toggleCommentLike(comment.id)
+                                            },
                                     ) {
                                         Icon(
-                                            imageVector = if (comment.isLikedByMe) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            imageVector =
+                                                if (comment.isLikedByMe) Icons.Default.Favorite
+                                                else Icons.Default.FavoriteBorder,
                                             contentDescription = "Like",
-                                            tint = if (comment.isLikedByMe) BadgeSeriesRed else TextGray,
-                                            modifier = Modifier.size(14.dp)
+                                            tint =
+                                                if (comment.isLikedByMe) BadgeSeriesRed
+                                                else TextGray,
+                                            modifier = Modifier.size(14.dp),
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text(text = "${comment.likesCount}", fontSize = 11.sp, color = TextGray)
+                                        Text(
+                                            text = "${comment.likesCount}",
+                                            fontSize = 11.sp,
+                                            color = TextGray,
+                                        )
                                     }
                                 }
 
@@ -599,10 +683,14 @@ fun VideoPlayerScreen(
                                         text = "⚠️ Spoiler mavjud (ko'rish uchun bosing)",
                                         fontSize = 12.sp,
                                         color = PremiumGold,
-                                        modifier = Modifier.clickable { isSpoilerHidden = false }
+                                        modifier = Modifier.clickable { isSpoilerHidden = false },
                                     )
                                 } else {
-                                    Text(text = comment.content, fontSize = 13.sp, color = TextWhite)
+                                    Text(
+                                        text = comment.content,
+                                        fontSize = 13.sp,
+                                        color = TextWhite,
+                                    )
                                 }
                             }
                         }
@@ -611,28 +699,31 @@ fun VideoPlayerScreen(
 
                 // Comment input (portrait only)
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfaceDark)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .background(SurfaceDark)
+                            .navigationBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedTextField(
                         value = commentText,
                         onValueChange = { commentText = it },
-                        placeholder = { Text("Fikringizni yozing...", color = TextGray, fontSize = 13.sp) },
+                        placeholder = {
+                            Text("Fikringizni yozing...", color = TextGray, fontSize = 13.sp)
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(20.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = InputBackground,
-                            unfocusedContainerColor = InputBackground,
-                            focusedBorderColor = PrimaryCyan,
-                            unfocusedBorderColor = InputBorder,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        ),
-                        modifier = Modifier.weight(1f)
+                        colors =
+                            OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = InputBackground,
+                                unfocusedContainerColor = InputBackground,
+                                focusedBorderColor = PrimaryCyan,
+                                unfocusedBorderColor = InputBorder,
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                            ),
+                        modifier = Modifier.weight(1f),
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -642,16 +733,13 @@ fun VideoPlayerScreen(
                             viewModel.postComment(episodeId, commentText, isSpoilerComment)
                             commentText = ""
                         },
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(PrimaryCyan)
+                        modifier = Modifier.size(42.dp).clip(CircleShape).background(PrimaryCyan),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
                             tint = OnPrimary,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }
@@ -669,7 +757,7 @@ fun VideoPlayerScreen(
                 currentSpeed = newSpeed
                 exoPlayer.setPlaybackSpeed(newSpeed)
             },
-            onDismiss = { showSpeedDialog = false }
+            onDismiss = { showSpeedDialog = false },
         )
     }
 
@@ -678,12 +766,18 @@ fun VideoPlayerScreen(
             onDismissRequest = { showResumeDialog = false },
             containerColor = CardDark,
             title = {
-                Text("Ko'rishni davom ettirasizmi?", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(
+                    "Ko'rishni davom ettirasizmi?",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                )
             },
             text = {
                 Text(
                     "Siz ushbu qismni ${formatPlayerTime(uiState.savedProgressSeconds * 1000L)} daqiqasigacha ko'rgansiz. Davom ettirishni xohlaysizmi?",
-                    color = TextGray, fontSize = 14.sp
+                    color = TextGray,
+                    fontSize = 14.sp,
                 )
             },
             confirmButton = {
@@ -695,19 +789,29 @@ fun VideoPlayerScreen(
                         exoPlayer.playWhenReady = true
                         exoPlayer.play()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan, contentColor = Color.Black),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text("Davom ettirish", fontWeight = FontWeight.Bold) }
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = PrimaryCyan,
+                            contentColor = Color.Black,
+                        ),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Text("Davom ettirish", fontWeight = FontWeight.Bold)
+                }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showResumeDialog = false
-                    hasStartedPlayback = true
-                    exoPlayer.seekTo(0L)
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.play()
-                }) { Text("Boshidan", color = TextWhite) }
-            }
+                TextButton(
+                    onClick = {
+                        showResumeDialog = false
+                        hasStartedPlayback = true
+                        exoPlayer.seekTo(0L)
+                        exoPlayer.playWhenReady = true
+                        exoPlayer.play()
+                    }
+                ) {
+                    Text("Boshidan", color = TextWhite)
+                }
+            },
         )
     }
 
@@ -715,7 +819,9 @@ fun VideoPlayerScreen(
         AlertDialog(
             onDismissRequest = { showQualityDialog = false },
             containerColor = CardDark,
-            title = { Text("Video Sifatini Tanlang", color = TextWhite, fontWeight = FontWeight.Bold) },
+            title = {
+                Text("Video Sifatini Tanlang", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
             text = {
                 val streams = uiState.streamsResponse!!.streams
                 if (streams.isEmpty()) {
@@ -723,62 +829,102 @@ fun VideoPlayerScreen(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         streams.forEach { stream ->
-                            val isSelected = uiState.selectedQuality == stream.quality &&
-                                    (uiState.selectedStream?.id == stream.id || uiState.selectedStreamUrl == stream.url)
-                            val displayQuality = when (stream.quality.uppercase()) {
-                                "AUTO_HLS", "AUTO", "AVTO" -> "Auto (Moslashuvchan HLS)"
-                                "P1080", "1080P" -> "1080p Full HD"
-                                "P720",  "720P"  -> "720p HD"
-                                "P480",  "480P"  -> "480p SD"
-                                "P360",  "360P"  -> "360p"
-                                else -> stream.quality.removePrefix("P")
-                            }
-                            val isEncrypted = stream.isEncrypted || stream.url.contains("aes", ignoreCase = true)
+                            val isSelected =
+                                uiState.selectedQuality == stream.quality &&
+                                    (uiState.selectedStream?.id == stream.id ||
+                                        uiState.selectedStreamUrl == stream.url)
+                            val displayQuality =
+                                when (stream.quality.uppercase()) {
+                                    "AUTO_HLS",
+                                    "AUTO",
+                                    "AVTO" -> "Auto (Moslashuvchan HLS)"
+                                    "P1080",
+                                    "1080P" -> "1080p Full HD"
+                                    "P720",
+                                    "720P" -> "720p HD"
+                                    "P480",
+                                    "480P" -> "480p SD"
+                                    "P360",
+                                    "360P" -> "360p"
+                                    else -> stream.quality.removePrefix("P")
+                                }
+                            val isEncrypted =
+                                stream.isEncrypted || stream.url.contains("aes", ignoreCase = true)
 
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) PrimaryCyan.copy(alpha = 0.15f) else Color.Transparent)
-                                    .clickable { viewModel.selectQuality(stream); showQualityDialog = false }
-                                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(
+                                            if (isSelected) PrimaryCyan.copy(alpha = 0.15f)
+                                            else Color.Transparent
+                                        )
+                                        .clickable {
+                                            viewModel.selectQuality(stream)
+                                            showQualityDialog = false
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (isSelected) {
-                                        Icon(Icons.Default.Check, contentDescription = null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = PrimaryCyan,
+                                            modifier = Modifier.size(16.dp),
+                                        )
                                         Spacer(modifier = Modifier.width(6.dp))
                                     }
                                     Text(
                                         text = displayQuality,
                                         color = if (isSelected) PrimaryCyan else TextWhite,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        fontSize = 14.sp
+                                        fontWeight =
+                                            if (isSelected) FontWeight.Bold
+                                            else FontWeight.SemiBold,
+                                        fontSize = 14.sp,
                                     )
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
                                     if (isEncrypted) {
                                         Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(PremiumGold.copy(alpha = 0.2f))
-                                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                                        ) { Text("AES-128", color = PremiumGold, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
+                                            modifier =
+                                                Modifier.clip(RoundedCornerShape(4.dp))
+                                                    .background(PremiumGold.copy(alpha = 0.2f))
+                                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                "AES-128",
+                                                color = PremiumGold,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                            )
+                                        }
                                     }
                                     Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(CardDarkElevated)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) { Text(stream.streamType, color = PrimaryCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                        modifier =
+                                            Modifier.clip(RoundedCornerShape(4.dp))
+                                                .background(CardDarkElevated)
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            stream.streamType,
+                                            color = PrimaryCyan,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             },
-            confirmButton = {}
+            confirmButton = {},
         )
     }
 
@@ -786,7 +932,9 @@ fun VideoPlayerScreen(
         AlertDialog(
             onDismissRequest = { showDubDialog = false },
             containerColor = CardDark,
-            title = { Text("Dublyaj / Ovozni Tanlang", color = TextWhite, fontWeight = FontWeight.Bold) },
+            title = {
+                Text("Dublyaj / Ovozni Tanlang", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
             text = {
                 val dubs = uiState.streamsResponse!!.dubs
                 if (dubs.isEmpty()) {
@@ -795,20 +943,31 @@ fun VideoPlayerScreen(
                     Column {
                         dubs.forEach { dub ->
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { viewModel.selectDub(dub); showDubDialog = false }
-                                    .padding(vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .clickable {
+                                            viewModel.selectDub(dub)
+                                            showDubDialog = false
+                                        }
+                                        .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text(dub.language, color = TextWhite, fontWeight = FontWeight.SemiBold)
-                                Text(dub.dubGroup ?: "Meduza", color = PrimaryCyan, fontSize = 12.sp)
+                                Text(
+                                    dub.language,
+                                    color = TextWhite,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    dub.dubGroup ?: "Meduza",
+                                    color = PrimaryCyan,
+                                    fontSize = 12.sp,
+                                )
                             }
                         }
                     }
                 }
             },
-            confirmButton = {}
+            confirmButton = {},
         )
     }
 }
@@ -819,19 +978,28 @@ fun VideoPlayerScreen(
 
 @OptIn(UnstableApi::class)
 @Composable
-private fun PlayerSurface(exoPlayer: ExoPlayer, modifier: Modifier = Modifier) {
+internal fun PlayerSurface(
+    exoPlayer: ExoPlayer,
+    modifier: Modifier = Modifier,
+    fill: Boolean = false,
+) {
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
                 player = exoPlayer
                 useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                resizeMode =
+                    if (fill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else AspectRatioFrameLayout.RESIZE_MODE_FIT
             }
         },
         update = { view ->
             if (view.player != exoPlayer) view.player = exoPlayer
+            view.resizeMode =
+                if (fill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                else AspectRatioFrameLayout.RESIZE_MODE_FIT
         },
-        modifier = modifier
+        modifier = modifier,
     )
 }
 
@@ -840,17 +1008,18 @@ private fun PlayerGestureLayer(
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onDoubleTapLeft: () -> Unit,
-    onDoubleTapRight: () -> Unit
+    onDoubleTapRight: () -> Unit,
 ) {
     Box(
-        modifier = modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onDoubleTap = { offset ->
-                    if (offset.x < size.width / 2) onDoubleTapLeft() else onDoubleTapRight()
-                },
-                onTap = { onTap() }
-            )
-        }
+        modifier =
+            modifier.pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        if (offset.x < size.width / 2) onDoubleTapLeft() else onDoubleTapRight()
+                    },
+                    onTap = { onTap() },
+                )
+            }
     )
 }
 
@@ -860,14 +1029,24 @@ private fun SeekFeedback(showRewindFeedback: Boolean, showForwardFeedback: Boole
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .padding(start = 40.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(14.dp)
+                modifier =
+                    Modifier.padding(start = 40.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(14.dp),
             ) {
-                Icon(Icons.Default.FastRewind, contentDescription = null, tint = PrimaryCyan, modifier = Modifier.size(32.dp))
-                Text("-10 soniya", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Icon(
+                    Icons.Default.FastRewind,
+                    contentDescription = null,
+                    tint = PrimaryCyan,
+                    modifier = Modifier.size(32.dp),
+                )
+                Text(
+                    "-10 soniya",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
@@ -875,14 +1054,24 @@ private fun SeekFeedback(showRewindFeedback: Boolean, showForwardFeedback: Boole
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .padding(end = 40.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(14.dp)
+                modifier =
+                    Modifier.padding(end = 40.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(14.dp),
             ) {
-                Icon(Icons.Default.FastForward, contentDescription = null, tint = PrimaryCyan, modifier = Modifier.size(32.dp))
-                Text("+10 soniya", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Icon(
+                    Icons.Default.FastForward,
+                    contentDescription = null,
+                    tint = PrimaryCyan,
+                    modifier = Modifier.size(32.dp),
+                )
+                Text(
+                    "+10 soniya",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }
@@ -909,23 +1098,27 @@ private fun PlayerControlsOverlay(
     onToggleFullscreen: () -> Unit,
     onShowSpeed: () -> Unit,
     onShowDub: () -> Unit,
-    onShowQuality: () -> Unit
+    onShowQuality: () -> Unit,
+    isVideoFilled: Boolean = false,
+    onToggleVideoFit: () -> Unit = {},
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.52f))
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.52f))) {
         // Top bar
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier.fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .displayCutoutPadding()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(20.dp))
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
             }
 
             Text(
@@ -935,40 +1128,70 @@ private fun PlayerControlsOverlay(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 6.dp)
+                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
             )
+
+            if (isFullscreen) {
+                TextButton(onClick = onToggleVideoFit, modifier = Modifier.heightIn(min = 44.dp)) {
+                    Icon(
+                        Icons.Default.AspectRatio,
+                        if (isVideoFilled) "Videoni to‘liq ko‘rsatish" else "Ekranni to‘ldirish",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        if (isVideoFilled) "To‘ldirish" else "Moslash",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                    )
+                }
+            }
 
             // Speed pill
             Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.18f))
-                    .clickable { onShowSpeed() }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier =
+                    Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.18f))
+                        .clickable { onShowSpeed() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text("${currentSpeed}x", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "${currentSpeed}x",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
 
             Spacer(modifier = Modifier.width(6.dp))
 
             if (hasAudioTracks) {
                 IconButton(onClick = onShowDub, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Audiotrack, contentDescription = "Dubbing", tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(
+                        Icons.Default.Audiotrack,
+                        contentDescription = "Dubbing",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
             }
 
             // Quality pill
             Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(PrimaryCyan.copy(alpha = 0.25f))
-                    .clickable { onShowQuality() }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                modifier =
+                    Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(PrimaryCyan.copy(alpha = 0.25f))
+                        .clickable { onShowQuality() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text(formatQualityLabel(selectedQuality), color = PrimaryCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    formatQualityLabel(selectedQuality),
+                    color = PrimaryCyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
 
@@ -976,45 +1199,52 @@ private fun PlayerControlsOverlay(
         Row(
             modifier = Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(28.dp)
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             IconButton(
                 onClick = onRewind,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
+                modifier =
+                    Modifier.size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f)),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.FastRewind, contentDescription = "-10s", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.Default.FastRewind,
+                        contentDescription = "-10s",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                     Text("10s", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryCyan)
+                modifier = Modifier.size(64.dp).clip(CircleShape).background(PrimaryCyan),
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
                     tint = Color.Black,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(36.dp),
                 )
             }
 
             IconButton(
                 onClick = onForward,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
+                modifier =
+                    Modifier.size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f)),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.FastForward, contentDescription = "+10s", tint = Color.White, modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.Default.FastForward,
+                        contentDescription = "+10s",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                     Text("10s", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -1022,18 +1252,18 @@ private fun PlayerControlsOverlay(
 
         // Bottom bar: time / slider / fullscreen
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .let { if (isFullscreen) it.navigationBarsPadding() else it }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier.fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .let { if (isFullscreen) it.navigationBarsPadding() else it }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = formatPlayerTime(currentPositionMs),
                 color = Color.White,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
 
             val totalMs = durationMs.coerceAtLeast(1L).toFloat()
@@ -1044,31 +1274,33 @@ private fun PlayerControlsOverlay(
                 onValueChange = onSeekChange,
                 onValueChangeFinished = onSeekFinished,
                 valueRange = 0f..totalMs,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                colors = SliderDefaults.colors(
-                    thumbColor = PrimaryCyan,
-                    activeTrackColor = PrimaryCyan,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                )
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                colors =
+                    SliderDefaults.colors(
+                        thumbColor = PrimaryCyan,
+                        activeTrackColor = PrimaryCyan,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+                    ),
             )
 
             Text(
                 text = formatPlayerTime(durationMs),
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
 
             Spacer(modifier = Modifier.width(4.dp))
 
             IconButton(onClick = onToggleFullscreen, modifier = Modifier.size(32.dp)) {
                 Icon(
-                    imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                    contentDescription = "Fullscreen",
+                    imageVector =
+                        if (isFullscreen) Icons.Default.FullscreenExit
+                        else Icons.Default.Fullscreen,
+                    contentDescription =
+                        if (isFullscreen) "To‘liq ekrandan chiqish" else "To‘liq ekran",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
@@ -1078,23 +1310,18 @@ private fun PlayerControlsOverlay(
 @Composable
 private fun InitialPlayButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.42f))
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+        modifier = modifier.background(Color.Black.copy(alpha = 0.42f)).clickable { onClick() },
+        contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(PrimaryCyan),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.size(68.dp).clip(CircleShape).background(PrimaryCyan),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = Icons.Default.PlayArrow,
                 contentDescription = "Boshlash",
                 tint = Color.Black,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(40.dp),
             )
         }
     }
@@ -1103,26 +1330,33 @@ private fun InitialPlayButton(modifier: Modifier = Modifier, onClick: () -> Unit
 @Composable
 private fun PremiumPaywall(onUpgrade: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(Icons.Default.Lock, contentDescription = null, tint = PremiumGold, modifier = Modifier.size(40.dp))
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            tint = PremiumGold,
+            modifier = Modifier.size(40.dp),
+        )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Ushbu qism faqat Premium obunachilar uchun!",
             color = TextWhite,
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(14.dp))
         Button(
             onClick = onUpgrade,
-            colors = ButtonDefaults.buttonColors(containerColor = PremiumGold, contentColor = Color.Black),
-            shape = RoundedCornerShape(20.dp)
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = PremiumGold,
+                    contentColor = Color.Black,
+                ),
+            shape = RoundedCornerShape(20.dp),
         ) {
             Text("Premium Obunani Faollashtirish", fontWeight = FontWeight.Bold)
         }
@@ -1132,27 +1366,36 @@ private fun PremiumPaywall(onUpgrade: () -> Unit) {
 @Composable
 private fun PlayerErrorState(message: String?, onBack: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
-        Icon(Icons.Default.Info, contentDescription = null, tint = PrimaryCyan, modifier = Modifier.size(36.dp))
+        Icon(
+            Icons.Default.Info,
+            contentDescription = null,
+            tint = PrimaryCyan,
+            modifier = Modifier.size(36.dp),
+        )
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = message ?: "Ushbu qism videosi hali yuklanmagan yoki mavjud emas",
             color = TextWhite,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(14.dp))
         Button(
             onClick = onBack,
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan, contentColor = Color.Black),
-            shape = RoundedCornerShape(20.dp)
-        ) { Text("Orqaga qaytish", fontWeight = FontWeight.Bold) }
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = PrimaryCyan,
+                    contentColor = Color.Black,
+                ),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Text("Orqaga qaytish", fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -1198,17 +1441,16 @@ private fun PlayerPortraitContent(
     onShowSpeed: () -> Unit,
     onShowDub: () -> Unit,
     onShowQuality: () -> Unit,
-    onFirstPlay: () -> Unit
+    onFirstPlay: () -> Unit,
 ) {
-    Box(
-        modifier = modifier.background(Color.Black)
-    ) {
+    Box(modifier = modifier.background(Color.Black)) {
         when {
             isPremiumRestricted -> PremiumPaywall(onUpgrade = onUpgrade)
 
-            isLoading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = PrimaryCyan)
-            }
+            isLoading ->
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = PrimaryCyan)
+                }
 
             hasError -> PlayerErrorState(message = errorMessage, onBack = onBack)
 
@@ -1219,12 +1461,12 @@ private fun PlayerPortraitContent(
                     modifier = Modifier.fillMaxSize(),
                     onTap = onTap,
                     onDoubleTapLeft = onDoubleTapLeft,
-                    onDoubleTapRight = onDoubleTapRight
+                    onDoubleTapRight = onDoubleTapRight,
                 )
 
                 SeekFeedback(
                     showRewindFeedback = showRewindFeedback,
-                    showForwardFeedback = showForwardFeedback
+                    showForwardFeedback = showForwardFeedback,
                 )
 
                 // Controls overlay — hidden while buffering.
@@ -1233,7 +1475,7 @@ private fun PlayerPortraitContent(
                     visible = areControlsVisible && !isBuffering,
                     enter = fadeIn(tween(180)),
                     exit = fadeOut(tween(180)),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     PlayerControlsOverlay(
                         isPlaying = isPlaying,
@@ -1255,7 +1497,7 @@ private fun PlayerPortraitContent(
                         onToggleFullscreen = onToggleFullscreen,
                         onShowSpeed = onShowSpeed,
                         onShowDub = onShowDub,
-                        onShowQuality = onShowQuality
+                        onShowQuality = onShowQuality,
                     )
                 }
 
@@ -1265,7 +1507,7 @@ private fun PlayerPortraitContent(
                         CircularProgressIndicator(
                             color = PrimaryCyan,
                             strokeWidth = 3.dp,
-                            modifier = Modifier.size(46.dp)
+                            modifier = Modifier.size(46.dp),
                         )
                     }
                 }
@@ -1274,7 +1516,7 @@ private fun PlayerPortraitContent(
                 if (!hasStartedPlayback && !isLoading && !isPremiumRestricted) {
                     InitialPlayButton(
                         modifier = Modifier.fillMaxSize(),
-                        onClick = onFirstPlay
+                        onClick = onFirstPlay,
                     )
                 }
             }
@@ -1299,11 +1541,23 @@ private fun formatPlayerTime(timeMs: Long): String {
     }
 }
 
-private fun formatQualityLabel(quality: String): String = when (quality.uppercase()) {
-    "AUTO_HLS", "AUTO", "AVTO" -> "Auto"
-    "P1080", "1080P", "1080"   -> "1080p"
-    "P720",  "720P",  "720"    -> "720p"
-    "P480",  "480P",  "480"    -> "480p"
-    "P360",  "360P",  "360"    -> "360p"
-    else -> if (quality.startsWith("P", ignoreCase = true)) quality.substring(1) + "p" else quality
-}
+private fun formatQualityLabel(quality: String): String =
+    when (quality.uppercase()) {
+        "AUTO_HLS",
+        "AUTO",
+        "AVTO" -> "Auto"
+        "P1080",
+        "1080P",
+        "1080" -> "1080p"
+        "P720",
+        "720P",
+        "720" -> "720p"
+        "P480",
+        "480P",
+        "480" -> "480p"
+        "P360",
+        "360P",
+        "360" -> "360p"
+        else ->
+            if (quality.startsWith("P", ignoreCase = true)) quality.substring(1) + "p" else quality
+    }

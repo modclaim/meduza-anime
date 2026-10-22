@@ -14,7 +14,7 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
     val authData: AuthData? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
@@ -25,65 +25,34 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     fun signInWithNexa() {
+        if (_uiState.value.isLoading) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val nexaResult = authManager.signIn()
             nexaResult.fold(
                 onSuccess = { tokens ->
-                    val userInfo = (authManager.authState.value as? uz.meduza.anime.core.auth.model.AuthState.Authenticated)?.user
+                    val userInfo =
+                        (authManager.authState.value
+                                as? uz.meduza.anime.core.auth.model.AuthState.Authenticated)
+                            ?.user
                     val backendResult = repository.loginWithNexa(tokens, userInfo)
                     backendResult.fold(
                         onSuccess = { data ->
                             _uiState.value = AuthUiState(isSuccess = true, authData = data)
                         },
                         onFailure = { error ->
-                            _uiState.value = AuthUiState(errorMessage = error.message ?: "Serverga ulanishda xatolik")
-                        }
+                            _uiState.value =
+                                AuthUiState(
+                                    errorMessage =
+                                        "Kirishni yakunlab bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring."
+                                )
+                        },
                     )
                 },
                 onFailure = { error ->
-                    _uiState.value = AuthUiState(errorMessage = error.message ?: "Nexa ID orqali kirish bekor qilindi yoki xatolik yuz berdi")
-                }
-            )
-        }
-    }
-
-    fun login(loginText: String, passText: String) {
-        if (loginText.isBlank() || passText.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Iltimos, barcha maydonlarni to'ldiring")
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = repository.login(loginText.trim(), passText.trim())
-            result.fold(
-                onSuccess = { data ->
-                    _uiState.value = AuthUiState(isSuccess = true, authData = data)
+                    _uiState.value =
+                        AuthUiState(errorMessage = "Kirish yakunlanmadi. Qayta urinib ko‘ring.")
                 },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState(errorMessage = error.message ?: "Kirishda xatolik yuz berdi")
-                }
-            )
-        }
-    }
-
-    fun register(emailText: String, userText: String, passText: String) {
-        if (emailText.isBlank() || userText.isBlank() || passText.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Barcha maydonlar to'ldirilishi shart")
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            val result = repository.register(emailText.trim(), userText.trim(), passText.trim())
-            result.fold(
-                onSuccess = { data ->
-                    _uiState.value = AuthUiState(isSuccess = true, authData = data)
-                },
-                onFailure = { error ->
-                    _uiState.value = AuthUiState(errorMessage = error.message ?: "Ro'yxatdan o'tishda xatolik")
-                }
             )
         }
     }

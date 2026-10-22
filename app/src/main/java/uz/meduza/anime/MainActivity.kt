@@ -23,13 +23,13 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         // Set native window background to match dark theme (eliminates white/black frame flicker)
-        window.decorView.setBackgroundColor(Color.parseColor("#0F1015"))
+        window.decorView.setBackgroundColor(Color.parseColor("#0B0D11"))
 
         setContent {
             MeduzaAnimeTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = BackgroundDark
+                    color = BackgroundDark,
                 ) {
                     AppNavigation()
                 }

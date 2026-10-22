@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -18,16 +19,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import java.util.Locale
 import uz.meduza.anime.core.ui.theme.*
 
-fun formatRatingCount(count: Int): String {
-    return when {
-        count >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", count / 1_000_000.0).replace(".0M", "M")
-        count >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", count / 1_000.0).replace(".0K", "K")
+fun formatRatingCount(count: Int): String =
+    when {
+        count >= 1_000_000 ->
+            String.format(Locale.US, "%.1fM", count / 1_000_000.0).replace(".0M", "M")
+        count >= 1_000 -> String.format(Locale.US, "%.1fK", count / 1_000.0).replace(".0K", "K")
         count > 0 -> count.toString()
         else -> ""
     }
-}
 
 @Composable
 fun AnimeCard(
@@ -38,100 +40,59 @@ fun AnimeCard(
     rating: Double = 0.0,
     ratingCount: Int = 0,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .width(140.dp)
-            .clickable { onClick() }
+        modifier.width(144.dp).clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        // Poster Box with Top Badge
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(190.dp)
-                .clip(RoundedCornerShape(14.dp))
+            Modifier.fillMaxWidth()
+                .aspectRatio(0.69f)
+                .clip(RoundedCornerShape(12.dp))
                 .background(CardDark)
         ) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-
-            // Series / Movie Pill Badge
-            val isMovie = type.equals("MOVIE", ignoreCase = true)
-            val badgeColor = if (isMovie) BadgeMovieCyan else BadgeSeriesRed
-            val badgeText = if (isMovie) "FILM" else "SERIAL"
-
+            AsyncImage(posterUrl, title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(
-                modifier = Modifier
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(badgeColor)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .align(Alignment.TopStart)
-            ) {
-                Text(
-                    text = badgeText,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isMovie) OnPrimary else Color.White
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Title
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextWhite,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        // Episodes / Seasons text
-        if (!episodesInfo.isNullOrEmpty()) {
-            Text(
-                text = episodesInfo,
-                fontSize = 11.sp,
-                color = TextGray,
-                maxLines = 1
+                Modifier.fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                            startY = 180f,
+                        )
+                    )
             )
-        }
-
-        // Rating Stars and Vote Count
-        if (rating > 0.0) {
             Row(
+                Modifier.align(Alignment.BottomStart).padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 2.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = "Rating",
-                    tint = StarGold,
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = String.format(java.util.Locale.US, "%.1f", rating),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = StarGold
-                )
-                if (ratingCount > 0) {
-                    Spacer(modifier = Modifier.width(4.dp))
+                if (rating > 0) {
+                    Icon(Icons.Default.Star, null, tint = StarGold, modifier = Modifier.size(13.dp))
                     Text(
-                        text = "(${formatRatingCount(ratingCount)})",
-                        fontSize = 10.sp,
-                        color = TextGray
+                        String.format(Locale.US, "%.1f", rating),
+                        color = TextWhite,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
         }
+        Text(
+            title,
+            color = TextWhite,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            episodesInfo ?: if (type == "MOVIE") "Film" else "Serial",
+            color = TextMuted,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

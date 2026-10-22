@@ -23,10 +23,11 @@ android {
         applicationId = "uz.meduza.anime"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
     signingConfigs {
@@ -56,7 +57,10 @@ android {
             }
         }
         debug {
-            // Use the standard debug keystore.
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "Meduza Preview"
+            versionNameSuffix = "-preview"
+            // Keep the published app and its user session intact on test devices.
         }
     }
     compileOptions {

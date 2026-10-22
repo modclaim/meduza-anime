@@ -6,6 +6,8 @@ import uz.meduza.anime.data.models.*
 
 interface MeduzaApiService {
 
+    @GET("app-config") suspend fun getAppConfig(): Response<ApiResponse<com.google.gson.JsonObject>>
+
     // ==================== AUTH ====================
     @POST("auth/nexa")
     suspend fun loginWithNexa(@Body request: NexaAuthRequest): Response<ApiResponse<AuthData>>
@@ -23,8 +25,7 @@ interface MeduzaApiService {
     suspend fun logout(@Body request: RefreshTokenRequest): Response<ApiResponse<Any?>>
 
     // ==================== USERS ====================
-    @GET("users/me")
-    suspend fun getMe(): Response<ApiResponse<UserDto>>
+    @GET("users/me") suspend fun getMe(): Response<ApiResponse<UserDto>>
 
     @PATCH("users/me")
     suspend fun updateProfile(@Body request: UpdateProfileRequest): Response<ApiResponse<UserDto>>
@@ -36,14 +37,14 @@ interface MeduzaApiService {
     suspend fun upgradePremium(@Body request: UpgradePremiumRequest): Response<ApiResponse<UserDto>>
 
     @POST("users/notifications/device")
-    suspend fun updateDeviceNotification(@Body request: DeviceNotificationRequest): Response<ApiResponse<Any?>>
+    suspend fun updateDeviceNotification(
+        @Body request: DeviceNotificationRequest
+    ): Response<ApiResponse<Any?>>
 
-    @DELETE("users/me")
-    suspend fun deleteAccount(): Response<ApiResponse<Any?>>
+    @DELETE("users/me") suspend fun deleteAccount(): Response<ApiResponse<Any?>>
 
     // ==================== GENRES ====================
-    @GET("genres")
-    suspend fun getGenres(): Response<ApiResponse<List<GenreDto>>>
+    @GET("genres") suspend fun getGenres(): Response<ApiResponse<List<GenreDto>>>
 
     // ==================== ANIMES ====================
     @GET("animes")
@@ -55,14 +56,18 @@ interface MeduzaApiService {
         @Query("status") status: String? = null,
         @Query("type") type: String? = null,
         @Query("sortBy") sortBy: String = "latest",
-        @Query("order") order: String = "desc"
+        @Query("order") order: String = "desc",
     ): Response<ApiResponse<List<AnimeDto>>>
 
     @GET("animes/trending")
-    suspend fun getTrendingAnimes(@Query("limit") limit: Int = 10): Response<ApiResponse<List<AnimeDto>>>
+    suspend fun getTrendingAnimes(
+        @Query("limit") limit: Int = 10
+    ): Response<ApiResponse<List<AnimeDto>>>
 
     @GET("animes/latest")
-    suspend fun getLatestAnimes(@Query("limit") limit: Int = 10): Response<ApiResponse<List<AnimeDto>>>
+    suspend fun getLatestAnimes(
+        @Query("limit") limit: Int = 10
+    ): Response<ApiResponse<List<AnimeDto>>>
 
     @GET("animes/search")
     suspend fun searchAnimes(
@@ -73,7 +78,7 @@ interface MeduzaApiService {
         @Query("type") type: String? = null,
         @Query("sortBy") sortBy: String? = null,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
     ): Response<ApiResponse<List<AnimeDto>>>
 
     @GET("animes/{slug}")
@@ -82,50 +87,59 @@ interface MeduzaApiService {
     @GET("animes/{slug}/episodes")
     suspend fun getAnimeEpisodes(
         @Path("slug") slug: String,
-        @Query("season") season: Int? = null
+        @Query("season") season: Int? = null,
     ): Response<ApiResponse<AnimeEpisodesResponse>>
 
     @POST("animes/{slug}/rate")
     suspend fun rateAnime(
         @Path("slug") slug: String,
-        @Body request: RateAnimeRequest
+        @Body request: RateAnimeRequest,
     ): Response<ApiResponse<RateAnimeResponse>>
 
     // ==================== EPISODES & STREAMS ====================
     @GET("episodes/{episode_id}")
-    suspend fun getEpisodeDetail(@Path("episode_id") episodeId: String): Response<ApiResponse<EpisodeDetailDto>>
+    suspend fun getEpisodeDetail(
+        @Path("episode_id") episodeId: String
+    ): Response<ApiResponse<EpisodeDetailDto>>
 
     @GET("episodes/{episode_id}/streams")
-    suspend fun getEpisodeStreams(@Path("episode_id") episodeId: String): Response<ApiResponse<EpisodeStreamsResponse>>
+    suspend fun getEpisodeStreams(
+        @Path("episode_id") episodeId: String
+    ): Response<ApiResponse<EpisodeStreamsResponse>>
 
     @GET("episodes/{episode_id}/dubs")
-    suspend fun getEpisodeDubs(@Path("episode_id") episodeId: String): Response<ApiResponse<List<DubTrackDto>>>
+    suspend fun getEpisodeDubs(
+        @Path("episode_id") episodeId: String
+    ): Response<ApiResponse<List<DubTrackDto>>>
 
     @GET("episodes/{episode_id}/subtitles")
-    suspend fun getEpisodeSubtitles(@Path("episode_id") episodeId: String): Response<ApiResponse<List<SubtitleTrackDto>>>
+    suspend fun getEpisodeSubtitles(
+        @Path("episode_id") episodeId: String
+    ): Response<ApiResponse<List<SubtitleTrackDto>>>
 
     // ==================== LIBRARY — HISTORY ====================
     @GET("library/history")
     suspend fun getWatchHistory(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 50
+        @Query("limit") limit: Int = 50,
     ): Response<ApiResponse<List<WatchHistoryItemDto>>>
 
     @POST("library/history")
     suspend fun saveProgress(@Body request: SaveProgressRequest): Response<ApiResponse<Any?>>
 
     @DELETE("library/history/{episode_id}")
-    suspend fun deleteHistoryItem(@Path("episode_id") episodeId: String): Response<ApiResponse<Any?>>
+    suspend fun deleteHistoryItem(
+        @Path("episode_id") episodeId: String
+    ): Response<ApiResponse<Any?>>
 
-    @DELETE("library/history")
-    suspend fun clearHistory(): Response<ApiResponse<Any?>>
+    @DELETE("library/history") suspend fun clearHistory(): Response<ApiResponse<Any?>>
 
     // ==================== LIBRARY — BOOKMARKS ====================
     @GET("library/bookmarks")
     suspend fun getBookmarks(
         @Query("status") status: String? = null,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 50
+        @Query("limit") limit: Int = 50,
     ): Response<ApiResponse<List<BookmarkItemDto>>>
 
     @POST("library/bookmarks")
@@ -139,38 +153,47 @@ interface MeduzaApiService {
     suspend fun getEpisodeComments(
         @Path("episode_id") episodeId: String,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
     ): Response<ApiResponse<List<CommentDto>>>
 
     @POST("episodes/{episode_id}/comments")
     suspend fun postComment(
         @Path("episode_id") episodeId: String,
-        @Body request: CreateCommentRequest
+        @Body request: CreateCommentRequest,
     ): Response<ApiResponse<CommentDto>>
 
     @POST("comments/{comment_id}/like")
-    suspend fun toggleCommentLike(@Path("comment_id") commentId: String): Response<ApiResponse<ToggleLikeResponse>>
+    suspend fun toggleCommentLike(
+        @Path("comment_id") commentId: String
+    ): Response<ApiResponse<ToggleLikeResponse>>
 
     @DELETE("comments/{comment_id}")
     suspend fun deleteComment(@Path("comment_id") commentId: String): Response<ApiResponse<Any?>>
 
     // ==================== SCHEDULE ====================
-    @GET("schedule")
-    suspend fun getWeeklySchedule(): Response<ApiResponse<ScheduleResponse>>
+    @GET("schedule") suspend fun getWeeklySchedule(): Response<ApiResponse<ScheduleResponse>>
 
     @GET("schedule/day/{day}")
-    suspend fun getScheduleByDay(@Path("day") day: String): Response<ApiResponse<DayScheduleResponse>>
+    suspend fun getScheduleByDay(
+        @Path("day") day: String
+    ): Response<ApiResponse<DayScheduleResponse>>
 
     // ==================== PAYMENTS (inPAY) ====================
     @GET("payments/plans")
     suspend fun getPaymentPlans(): Response<ApiResponse<List<PaymentPlanDto>>>
 
     @POST("payments/create")
-    suspend fun createPayment(@Body request: CreatePaymentRequest): Response<ApiResponse<CreatePaymentResponse>>
+    suspend fun createPayment(
+        @Body request: CreatePaymentRequest
+    ): Response<ApiResponse<CreatePaymentResponse>>
 
     @GET("payments/status/{orderId}")
-    suspend fun getPaymentStatus(@Path("orderId") orderId: String): Response<ApiResponse<PaymentStatusResponse>>
+    suspend fun getPaymentStatus(
+        @Path("orderId") orderId: String
+    ): Response<ApiResponse<PaymentStatusResponse>>
 
     @POST("payments/simulate/{orderId}")
-    suspend fun simulatePaymentSuccess(@Path("orderId") orderId: String): Response<ApiResponse<Any?>>
+    suspend fun simulatePaymentSuccess(
+        @Path("orderId") orderId: String
+    ): Response<ApiResponse<Any?>>
 }

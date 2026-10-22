@@ -16,11 +16,12 @@ data class LibraryUiState(
     val isLoading: Boolean = true,
     val bookmarks: List<BookmarkItemDto> = emptyList(),
     val history: List<WatchHistoryItemDto> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
     private val libraryRepo = LibraryRepository(application)
+    private var loadJob: kotlinx.coroutines.Job? = null
 
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
@@ -43,24 +44,30 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun loadBookmarks() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = libraryRepo.getBookmarks(null)
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                bookmarks = result.getOrDefault(emptyList())
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    bookmarks = result.getOrDefault(_uiState.value.bookmarks),
+                    errorMessage = result.exceptionOrNull()?.message,
+                )
         }
     }
 
     private fun loadHistory() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             val result = libraryRepo.getWatchHistory()
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                history = result.getOrDefault(emptyList())
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    history = result.getOrDefault(_uiState.value.history),
+                    errorMessage = result.exceptionOrNull()?.message,
+                )
         }
     }
 

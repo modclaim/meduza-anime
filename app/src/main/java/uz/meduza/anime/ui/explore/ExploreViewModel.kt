@@ -18,11 +18,12 @@ data class ExploreUiState(
     val genres: List<GenreDto> = emptyList(),
     val selectedGenres: Set<String> = emptySet(),
     val animes: List<AnimeDto> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 class ExploreViewModel(application: Application) : AndroidViewModel(application) {
     private val animeRepo = AnimeRepository(application)
+    private var loadJob: kotlinx.coroutines.Job? = null
 
     private val _uiState = MutableStateFlow(ExploreUiState())
     val uiState: StateFlow<ExploreUiState> = _uiState.asStateFlow()
@@ -52,12 +53,18 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleGenre(genreSlug: String) {
         val current = _uiState.value.selectedGenres
-        val next = if (current.contains(genreSlug)) {
-            current - genreSlug
-        } else {
-            current + genreSlug
-        }
+        val next =
+            if (current.contains(genreSlug)) {
+                current - genreSlug
+            } else {
+                current + genreSlug
+            }
         _uiState.value = _uiState.value.copy(selectedGenres = next)
+        loadAnimes()
+    }
+
+    fun setGenres(genres: Set<String>) {
+        _uiState.value = _uiState.value.copy(selectedGenres = genres)
         loadAnimes()
     }
 
@@ -68,26 +75,38 @@ class ExploreViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun loadAnimes() {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             val state = _uiState.value
-            val typeParam = if (state.selectedFilter == "TV" || state.selectedFilter == "MOVIE") state.selectedFilter else null
-            val statusParam = if (state.selectedFilter == "ONGOING" || state.selectedFilter == "COMPLETED") state.selectedFilter else null
-            val genreParam = if (state.selectedGenres.isEmpty()) null else state.selectedGenres.sorted().joinToString(",")
+            val typeParam =
+                if (state.selectedFilter == "TV" || state.selectedFilter == "MOVIE")
+                    state.selectedFilter
+                else null
+            val statusParam =
+                if (state.selectedFilter == "ONGOING" || state.selectedFilter == "COMPLETED")
+                    state.selectedFilter
+                else null
+            val genreParam =
+                if (state.selectedGenres.isEmpty()) null
+                else state.selectedGenres.sorted().joinToString(",")
 
-            val result = animeRepo.getAnimes(
-                type = typeParam,
-                status = statusParam,
-                sortBy = state.sortBy,
-                genre = genreParam
-            )
+            val result =
+                animeRepo.getAnimes(
+                    type = typeParam,
+                    status = statusParam,
+                    sortBy = state.sortBy,
+                    genre = genreParam,
+                )
 
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                animes = result.getOrDefault(emptyList()),
-                errorMessage = if (result.isFailure) result.exceptionOrNull()?.localizedMessage else null
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    animes = result.getOrDefault(emptyList()),
+                    errorMessage =
+                        if (result.isFailure) result.exceptionOrNull()?.localizedMessage else null,
+                )
         }
     }
 }

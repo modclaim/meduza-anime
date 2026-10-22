@@ -17,7 +17,7 @@ data class SearchUiState(
     val sortBy: String = "latest", // latest, rating, views, title
     val isLoading: Boolean = false,
     val searchResults: List<AnimeDto> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -28,17 +28,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     init {
-        loadInitialData()
+        retry()
     }
 
     private fun loadInitialData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val result = animeRepo.getAnimes(sortBy = _uiState.value.sortBy)
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                searchResults = result.getOrDefault(emptyList())
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    searchResults = result.getOrDefault(emptyList()),
+                )
         }
     }
 
@@ -69,23 +70,28 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private suspend fun performSearch(q: String, sort: String) {
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-        val result = if (q.isBlank()) {
-            animeRepo.getAnimes(sortBy = sort)
-        } else {
-            animeRepo.searchAnimes(query = q.trim(), sortBy = sort)
-        }
+        val result =
+            if (q.isBlank()) {
+                animeRepo.getAnimes(sortBy = sort)
+            } else {
+                animeRepo.searchAnimes(query = q.trim(), sortBy = sort)
+            }
 
-        result.onSuccess { animes ->
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                searchResults = animes,
-                errorMessage = null
-            )
-        }.onFailure { error ->
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                errorMessage = error.localizedMessage ?: "Qidiruvda xatolik yuz berdi"
-            )
-        }
+        result
+            .onSuccess { animes ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        searchResults = animes,
+                        errorMessage = null,
+                    )
+            }
+            .onFailure { error ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.localizedMessage ?: "Qidiruvda xatolik yuz berdi",
+                    )
+            }
     }
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MeduzaAnime" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0B0D11</item>
+        <item name="android:navigationBarColor">#0B0D11</item>
+        <item name="android:windowBackground">#0B0D11</item>
+        <item name="android:windowSplashScreenBackground">#0B0D11</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_meduza_logo</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

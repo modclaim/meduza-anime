@@ -1,17 +1,15 @@
 package uz.meduza.anime.ui.library
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,224 +22,168 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import uz.meduza.anime.core.ui.components.AnimeCard
-import uz.meduza.anime.core.ui.components.ContinueWatchingCard
+import uz.meduza.anime.core.ui.components.*
 import uz.meduza.anime.core.ui.theme.*
 
 @Composable
 fun LibraryScreen(
-    onAnimeClick: (slug: String) -> Unit,
-    onEpisodeClick: (episodeId: String, slug: String) -> Unit,
-    viewModel: LibraryViewModel = viewModel()
+    onAnimeClick: (String) -> Unit,
+    onEpisodeClick: (String, String) -> Unit,
+    viewModel: LibraryViewModel = viewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(BackgroundDark)
-            .padding(top = 16.dp)
-    ) {
-        Text(
-            text = "Sevimlilar",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextWhite,
-            modifier = Modifier.padding(horizontal = 20.dp)
+    val state by viewModel.uiState.collectAsState()
+    var clear by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(BackgroundDark).statusBarsPadding()) {
+        ScreenHeading(
+            "Kutubxona",
+            "Siz uchun saqlangan hikoyalar",
+            action = {
+                if (state.selectedTab == 1 && state.history.isNotEmpty())
+                    IconButton(onClick = { clear = true }) {
+                        Icon(Icons.Outlined.DeleteOutline, "Tarixni tozalash", tint = TextMuted)
+                    }
+            },
         )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Main Tab Switcher [ SAQLANGANLAR ] [ TARIX ]
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(CardDark)
-                .padding(4.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (uiState.selectedTab == 0) PrimaryCyan else CardDark)
-                    .clickable { viewModel.selectTab(0) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Saqlanganlar",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (uiState.selectedTab == 0) OnPrimary else TextGray
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (uiState.selectedTab == 1) PrimaryCyan else CardDark)
-                    .clickable { viewModel.selectTab(1) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Ko'rish Tarixi",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (uiState.selectedTab == 1) OnPrimary else TextGray
-                )
-            }
+        TabRow(state.selectedTab, containerColor = BackgroundDark, contentColor = PrimaryCyan) {
+            Tab(
+                selected = state.selectedTab == 0,
+                onClick = { viewModel.selectTab(0) },
+                text = { Text("Saqlanganlar") },
+            )
+            Tab(
+                selected = state.selectedTab == 1,
+                onClick = { viewModel.selectTab(1) },
+                text = { Text("Ko‘rish tarixi") },
+            )
         }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (uiState.selectedTab == 0) {
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PrimaryCyan)
-                }
-            } else if (uiState.bookmarks.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Saqlangan animelar yo'q", color = TextGray, fontSize = 14.sp)
-                }
-            } else {
+        if (state.errorMessage != null)
+            Box(Modifier.padding(20.dp)) {
+                InlineMessage("Kutubxonani yangilab bo‘lmadi.") { viewModel.refreshCurrentTab() }
+            }
+        if (state.isLoading)
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        else if (state.selectedTab == 0) {
+            if (state.bookmarks.isEmpty())
+                EmptyState(
+                    "Hozircha hech narsa yo‘q",
+                    "Yoqtirgan animengizni saqlang. U shu yerda paydo bo‘ladi.",
+                    Icons.Outlined.BookmarkBorder,
+                )
+            else
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize()
+                    columns = GridCells.Adaptive(144.dp),
+                    contentPadding = PaddingValues(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    items(uiState.bookmarks) { item ->
+                    items(state.bookmarks, key = { it.id }) { saved ->
                         AnimeCard(
-                            title = item.anime.title,
-                            posterUrl = item.anime.posterUrl,
-                            type = item.anime.type,
-                            rating = item.anime.rating,
-                            onClick = { onAnimeClick(item.anime.slug) },
-                            modifier = Modifier.fillMaxWidth()
+                            saved.anime.title,
+                            saved.anime.posterUrl,
+                            saved.anime.type,
+                            rating = saved.anime.rating,
+                            onClick = { onAnimeClick(saved.anime.slug) },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }
-            }
-        } else {
-            // Watch History Tab
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PrimaryCyan)
-                }
-            } else if (uiState.history.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = "Ko'rish tarixi bo'sh", color = TextGray, fontSize = 14.sp)
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    item {
+        } else if (state.history.isEmpty())
+            EmptyState(
+                "Tarix hali bo‘sh",
+                "Tomosha qilishni boshlang. Keyin shu yerdan davom ettiring.",
+                Icons.Outlined.History,
+            )
+        else
+            LazyColumn(
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(state.history, key = { it.id }) { history ->
+                    val ep = history.episode
+                    Surface(
+                        onClick = { onEpisodeClick(ep.id, ep.anime.slug) },
+                        color = SurfaceDark,
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = "Barcha ko'rilganlar (${uiState.history.size})",
-                                fontSize = 13.sp,
-                                color = TextGray,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            TextButton(onClick = { viewModel.clearHistory() }) {
-                                Text(
-                                    text = "Tarixni tozalash",
-                                    color = BadgeSeriesRed,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-
-                    items(uiState.history) { item ->
-                        val ep = item.episode
-                        val remMins = ((item.duration - item.stoppedAt).coerceAtLeast(0)) / 60
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(CardDark)
-                                .clickable { onEpisodeClick(ep.id, ep.anime.slug) }
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Thumbnail with bottom progress
                             Box(
-                                modifier = Modifier
-                                    .width(110.dp)
-                                    .height(68.dp)
+                                Modifier.width(104.dp)
+                                    .aspectRatio(16f / 9f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(BackgroundDark)
+                                    .background(CardDark)
                             ) {
                                 AsyncImage(
-                                    model = ep.thumbnailUrl ?: ep.anime.posterUrl,
-                                    contentDescription = ep.anime.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                    ep.thumbnailUrl ?: ep.anime.posterUrl,
+                                    null,
+                                    Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
                                 )
                                 LinearProgressIndicator(
-                                    progress = { (item.progressPercent.coerceIn(0, 100)) / 100f },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .align(Alignment.BottomCenter),
+                                    progress = { history.progressPercent.coerceIn(0, 100) / 100f },
+                                    modifier =
+                                        Modifier.align(Alignment.BottomCenter)
+                                            .fillMaxWidth()
+                                            .height(3.dp),
                                     color = PrimaryCyan,
-                                    trackColor = CardDark.copy(alpha = 0.6f)
                                 )
                             }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
+                            ) {
                                 Text(
-                                    text = ep.anime.title,
-                                    fontWeight = FontWeight.Bold,
+                                    ep.anime.title,
                                     color = TextWhite,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
-                                Spacer(modifier = Modifier.height(3.dp))
                                 Text(
-                                    text = "${ep.episodeNumber}-qism: ${ep.title}",
-                                    color = PrimaryCyan,
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = "${item.progressPercent}% • Qolgan: $remMins daqiqa",
-                                    color = TextGray,
-                                    fontSize = 11.sp
+                                    "${ep.episodeNumber}-qism · ${history.progressPercent.coerceIn(0, 100)}%",
+                                    color = TextMuted,
+                                    fontSize = 11.sp,
                                 )
                             }
-
-                            IconButton(onClick = { viewModel.deleteHistoryItem(ep.id) }) {
+                            IconButton(
+                                onClick = { viewModel.deleteHistoryItem(ep.id) },
+                                modifier = Modifier.size(40.dp),
+                            ) {
                                 Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = BadgeSeriesRed
+                                    Icons.Outlined.DeleteOutline,
+                                    "Tarixdan olib tashlash",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp),
                                 )
                             }
                         }
                     }
                 }
             }
-        }
     }
+    if (clear)
+        AlertDialog(
+            onDismissRequest = { clear = false },
+            title = { Text("Tarixni tozalaysizmi?") },
+            text = {
+                Text("Ko‘rish tarixi o‘chiriladi. Saqlangan animelaringiz kutubxonada qoladi.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        clear = false
+                        viewModel.clearHistory()
+                    }
+                ) {
+                    Text("Tozalash")
+                }
+            },
+            dismissButton = { TextButton(onClick = { clear = false }) { Text("Bekor qilish") } },
+        )
 }

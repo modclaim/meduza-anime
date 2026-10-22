@@ -24,7 +24,7 @@ data class ProfileUiState(
     val isCreatingPayment: Boolean = false,
     val activeOrderId: String? = null,
     val isCheckingPayment: Boolean = false,
-    val paymentSuccessMessage: String? = null
+    val paymentSuccessMessage: String? = null,
 )
 
 class ProfileViewModel(application: Application) : AndroidViewModel(application) {
@@ -37,8 +37,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        loadProfile()
-        loadPaymentPlans()
+        if (sessionManager.isLoggedInSync()) {
+            loadProfile()
+            loadPaymentPlans()
+        } else {
+            _uiState.value = ProfileUiState(isLoading = false)
+        }
     }
 
     fun loadProfile(forceRefresh: Boolean = false) {
@@ -49,18 +53,20 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             val result = userRepo.getMe(forceRefresh = forceRefresh)
             result.fold(
                 onSuccess = { user ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        user = user,
-                        errorMessage = null
-                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            user = user,
+                            errorMessage = null,
+                        )
                 },
                 onFailure = { err ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = err.message
-                    )
-                }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = err.message,
+                        )
+                },
             )
         }
     }
@@ -71,56 +77,71 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             val result = paymentRepo.getPlans()
             result.fold(
                 onSuccess = { plans ->
-                    _uiState.value = _uiState.value.copy(
-                        plans = plans,
-                        isLoadingPlans = false
-                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            plans = plans,
+                            isLoadingPlans = false,
+                        )
                 },
                 onFailure = {
-                    _uiState.value = _uiState.value.copy(
-                        plans = emptyList(),
-                        errorMessage = "Tariflarni yuklab bo‘lmadi. Qayta urinib ko‘ring.",
-                        isLoadingPlans = false
-                    )
-                }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            plans = emptyList(),
+                            errorMessage = "Tariflarni yuklab bo‘lmadi. Qayta urinib ko‘ring.",
+                            isLoadingPlans = false,
+                        )
+                },
             )
         }
     }
 
     fun createPayment(planType: String, onInvoiceReady: (payUrl: String, orderId: String) -> Unit) {
+        if (
+            _uiState.value.isCreatingPayment ||
+                _uiState.value.plans.none { it.planType == planType }
+        )
+            return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreatingPayment = true, errorMessage = null)
             val result = paymentRepo.createPayment(planType)
             result.fold(
                 onSuccess = { res ->
-                    _uiState.value = _uiState.value.copy(
-                        isCreatingPayment = false,
-                        activeOrderId = res.orderId
-                    )
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isCreatingPayment = false,
+                            activeOrderId = res.orderId,
+                        )
                     onInvoiceReady(res.payUrl, res.orderId)
                 },
                 onFailure = { err ->
-                    _uiState.value = _uiState.value.copy(
-                        isCreatingPayment = false,
-                        errorMessage = err.message ?: "To'lovni boshlashda xatolik"
-                    )
-                }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isCreatingPayment = false,
+                            errorMessage = err.message ?: "To'lovni boshlashda xatolik",
+                        )
+                },
             )
         }
     }
 
     fun checkPaymentStatus(orderId: String, onFinished: (Boolean) -> Unit) {
+        if (_uiState.value.isCheckingPayment) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCheckingPayment = true)
             val result = paymentRepo.getPaymentStatus(orderId)
             result.fold(
                 onSuccess = { statusRes ->
                     _uiState.value = _uiState.value.copy(isCheckingPayment = false)
-                    if (statusRes.status.equals("success", ignoreCase = true) || statusRes.paidAt != null) {
+                    if (
+                        statusRes.status.equals("success", ignoreCase = true) ||
+                            statusRes.paidAt != null
+                    ) {
                         loadProfile(forceRefresh = true)
-                        _uiState.value = _uiState.value.copy(
-                            paymentSuccessMessage = "To'lov muvaffaqiyatli amalga oshirildi! Premium obunangiz faollashtirildi! 🎉"
-                        )
+                        _uiState.value =
+                            _uiState.value.copy(
+                                paymentSuccessMessage =
+                                    "To'lov muvaffaqiyatli amalga oshirildi! Premium obunangiz faollashtirildi! 🎉"
+                            )
                         onFinished(true)
                     } else {
                         onFinished(false)
@@ -129,31 +150,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 onFailure = {
                     _uiState.value = _uiState.value.copy(isCheckingPayment = false)
                     onFinished(false)
-                }
-            )
-        }
-    }
-
-    fun simulateTestPayment(orderId: String, onFinished: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isCheckingPayment = true)
-            val result = paymentRepo.simulateSuccess(orderId)
-            result.fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(isCheckingPayment = false)
-                    loadProfile(forceRefresh = true)
-                    _uiState.value = _uiState.value.copy(
-                        paymentSuccessMessage = "Demo to'lov muvaffaqiyatli tasdiqlandi! Premium faol! 🎉"
-                    )
-                    onFinished(true)
                 },
-                onFailure = { err ->
-                    _uiState.value = _uiState.value.copy(
-                        isCheckingPayment = false,
-                        errorMessage = err.message
-                    )
-                    onFinished(false)
-                }
             )
         }
     }
@@ -164,8 +161,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout(onLoggedOut: () -> Unit) {
         viewModelScope.launch {
-            authRepo.logout()
-            onLoggedOut()
+            try {
+                authRepo.logout()
+            } finally {
+                onLoggedOut()
+            }
         }
     }
 
@@ -179,8 +179,9 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     onDeleted()
                 },
                 onFailure = { err ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = err.message)
-                }
+                    _uiState.value =
+                        _uiState.value.copy(isLoading = false, errorMessage = err.message)
+                },
             )
         }
     }

@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -25,67 +27,49 @@ fun ContinueWatchingCard(
     thumbnailUrl: String?,
     progressPercent: Int,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .width(160.dp)
-            .clickable { onClick() }
+        modifier
+            .width(252.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(SurfaceDark)
+            .clickable(onClick = onClick)
     ) {
-        // Thumbnail with bottom progress indicator
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(96.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(CardDark)
-        ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(CardDark)) {
             AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                thumbnailUrl,
+                title,
+                Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
-
-            // Progress bar overlay at bottom of thumbnail
+            Icon(
+                Icons.Default.PlayCircle,
+                null,
+                tint = TextWhite,
+                modifier = Modifier.align(Alignment.Center).size(38.dp),
+            )
             LinearProgressIndicator(
-                progress = { (progressPercent.coerceIn(0, 100)) / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .align(Alignment.BottomCenter),
+                progress = { progressPercent.coerceIn(0, 100) / 100f },
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                 color = PrimaryCyan,
-                trackColor = CardDark.copy(alpha = 0.6f)
+                trackColor = CardDarkElevated,
             )
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Title
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextWhite,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        // Episode & Remaining Time
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = episodeText,
-                fontSize = 11.sp,
-                color = TextGray,
-                maxLines = 1
+                title,
+                color = TextWhite,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "$remainingMinutes mins",
+                "$episodeText · ${remainingMinutes.coerceAtLeast(0)} daq. qoldi",
+                color = TextMuted,
                 fontSize = 11.sp,
-                color = TextGray
+                maxLines = 1,
             )
         }
     }

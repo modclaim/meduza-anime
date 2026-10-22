@@ -2,30 +2,21 @@ package uz.meduza.anime.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Design system colors matching app.png mockup
-val BackgroundDark = Color(0xFF0F1015)
-val SurfaceDark = Color(0xFF16171F)
-val CardDark = Color(0xFF1F222E)
-val CardDarkElevated = Color(0xFF282B3A)
-
-// Primary Accent (Vibrant Cyan / Turquoise)
-val PrimaryCyan = Color(0xFF00E5BE)
-val PrimaryCyanDark = Color(0xFF00B894)
-val PrimaryCyanLight = Color(0xFF64FFDA)
-val OnPrimary = Color(0xFF000000)
-
-// Text Colors
-val TextWhite = Color(0xFFFFFFFF)
-val TextGray = Color(0xFF9E9E9E)
-val TextMuted = Color(0xFF6B6E7D)
-
-// Badges & Accents
-val BadgeSeriesRed = Color(0xFFFF4D4D)
-val BadgeMovieCyan = Color(0xFF00E5BE)
-val StarGold = Color(0xFFFFD700)
-val PremiumGold = Color(0xFFFFA000)
-
-// Borders & Inputs
-val InputBackground = Color(0xFF1B1D26)
-val InputBorder = Color(0xFF2A2D3C)
-val DividerDark = Color(0xFF232634)
+val BackgroundDark = Color(0xFF0B0D11)
+val SurfaceDark = Color(0xFF12151B)
+val CardDark = Color(0xFF191D25)
+val CardDarkElevated = Color(0xFF232832)
+val PrimaryCyan = Color(0xFF79E2C7)
+val PrimaryCyanDark = Color(0xFF3BB89C)
+val PrimaryCyanLight = Color(0xFFB1F1E1)
+val OnPrimary = Color(0xFF09231C)
+val TextWhite = Color(0xFFF4F5F7)
+val TextGray = Color(0xFFA4ADB9)
+val TextMuted = Color(0xFF788390)
+val BadgeSeriesRed = Color(0xFFF28D91)
+val BadgeMovieCyan = PrimaryCyan
+val StarGold = Color(0xFFE9CD91)
+val PremiumGold = Color(0xFFE9CD91)
+val InputBackground = SurfaceDark
+val InputBorder = Color(0xFF2A303A)
+val DividerDark = Color(0xFF242933)

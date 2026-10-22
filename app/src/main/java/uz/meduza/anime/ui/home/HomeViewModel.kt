@@ -25,9 +25,10 @@ data class HomeUiState(
     val continueWatchingList: List<WatchHistoryItemDto> = emptyList(),
     val upcomingPremieres: List<UpcomingAnimeDto> = emptyList(),
     val errorMessage: String? = null,
-    val hasData: Boolean = false
+    val hasData: Boolean = false,
 ) {
-    val trendingAnimes: List<AnimeDto> get() = popularAnimes
+    val trendingAnimes: List<AnimeDto>
+        get() = popularAnimes
 }
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -58,7 +59,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     coroutineScope {
                         val popularDeferred = async { animeRepo.getTrendingAnimes(10) }
                         val latestDeferred = async { animeRepo.getLatestAnimes(10) }
-                        val historyDeferred = async { libraryRepo.getWatchHistory() }
+                        val historyDeferred = async {
+                            if (
+                                uz.meduza.anime.core.session.SessionManager.getInstance(
+                                        getApplication()
+                                    )
+                                    .isLoggedInSync()
+                            )
+                                libraryRepo.getWatchHistory()
+                            else Result.success(emptyList())
+                        }
                         val scheduleDeferred = async { scheduleRepo.getWeeklySchedule() }
 
                         val popularResult = popularDeferred.await()
@@ -68,27 +78,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
                         val popular = popularResult.getOrDefault(_uiState.value.popularAnimes)
                         val latest = latestResult.getOrDefault(_uiState.value.latestAnimes)
-                        val history = historyResult.getOrDefault(_uiState.value.continueWatchingList)
-                        val upcoming = scheduleResult.getOrNull()?.upcomingPremieres?.animes
-                            ?: _uiState.value.upcomingPremieres
+                        val history =
+                            historyResult.getOrDefault(_uiState.value.continueWatchingList)
+                        val upcoming =
+                            scheduleResult.getOrNull()?.upcomingPremieres?.animes
+                                ?: _uiState.value.upcomingPremieres
 
                         val hasError = popularResult.isFailure && latestResult.isFailure
 
-                        _uiState.value = HomeUiState(
-                            isLoading = false,
-                            isRefreshing = false,
-                            popularAnimes = popular,
-                            latestAnimes = latest,
-                            continueWatchingList = history,
-                            upcomingPremieres = upcoming,
-                            hasData = popular.isNotEmpty() || latest.isNotEmpty(),
-                            errorMessage = if (hasError && popular.isEmpty() && latest.isEmpty())
-                                (popularResult.exceptionOrNull()?.message ?: "Ma'lumotlarni yuklab bo'lmadi")
-                            else null
-                        )
+                        _uiState.value =
+                            HomeUiState(
+                                isLoading = false,
+                                isRefreshing = false,
+                                popularAnimes = popular,
+                                latestAnimes = latest,
+                                continueWatchingList = history,
+                                upcomingPremieres = upcoming,
+                                hasData = popular.isNotEmpty() || latest.isNotEmpty(),
+                                errorMessage =
+                                    if (hasError && popular.isEmpty() && latest.isEmpty())
+                                        (popularResult.exceptionOrNull()?.message
+                                            ?: "Ma'lumotlarni yuklab bo'lmadi")
+                                    else null,
+                            )
                     }
                     return@launch
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     lastError = e
                     if (attempt < maxAttempts) {
                         delay(600L * attempt)
@@ -96,13 +112,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                isRefreshing = false,
-                errorMessage = if (!_uiState.value.hasData)
-                    (lastError?.message ?: "Ulanishda muammo yuz berdi. Internet aloqasini tekshiring.")
-                else null
-            )
+            _uiState.value =
+                _uiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    errorMessage =
+                        if (!_uiState.value.hasData)
+                            (lastError?.message
+                                ?: "Ulanishda muammo yuz berdi. Internet aloqasini tekshiring.")
+                        else null,
+                )
         }
     }
 

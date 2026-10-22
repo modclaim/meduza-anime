@@ -1,21 +1,16 @@
 package uz.meduza.anime.ui.detail
 
-import android.widget.Toast
-import androidx.compose.animation.animateContentSize
+import android.content.Intent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.BookmarkAdd
-import androidx.compose.material.icons.outlined.BookmarkRemove
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,678 +21,484 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
-import uz.meduza.anime.core.ui.components.EpisodeItemCard
-import uz.meduza.anime.core.ui.components.EpisodeStyle
-import uz.meduza.anime.core.ui.components.formatRatingCount
+import java.util.Locale
+import uz.meduza.anime.core.ui.components.*
 import uz.meduza.anime.core.ui.theme.*
-import uz.meduza.anime.data.models.AnimeDto
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AnimeDetailScreen(
     slug: String,
     initialTab: Int = 0,
     onBackClick: () -> Unit,
-    onEpisodeClick: (episodeId: String, slug: String) -> Unit,
-    viewModel: AnimeDetailViewModel = viewModel()
+    onEpisodeClick: (String, String) -> Unit,
+    isLoggedIn: Boolean = true,
+    onSignIn: () -> Unit = {},
+    viewModel: AnimeDetailViewModel = viewModel(),
 ) {
+    val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
-    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) } // 0: Qismlar, 1: Ma'lumot, 2: Fikrlar
-    var isSynopsisExpanded by remember { mutableStateOf(false) }
-    var showRatingDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(slug) {
-        viewModel.loadAnimeDetail(slug)
-    }
-
-    LaunchedEffect(uiState.anime) {
-        val anime = uiState.anime
-        if (anime != null && initialTab == 0 && (anime.status.equals("UPCOMING", ignoreCase = true) || anime.status.equals("SCHEDULED", ignoreCase = true) || (anime.totalReleasedEpisodes == 0 && uiState.episodes.isEmpty()))) {
-            selectedTab = 1
-        }
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = BackgroundDark
-    ) {
-        if (uiState.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = PrimaryCyan)
+    var tab by remember(slug) { mutableIntStateOf(if (initialTab == 0 && isLoggedIn) 0 else 1) }
+    var ratingOpen by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
+    var selectedScore by remember { mutableIntStateOf(8) }
+    LaunchedEffect(slug, isLoggedIn) { viewModel.loadAnimeDetail(slug, isLoggedIn) }
+    LaunchedEffect(state.ratingSaved) { if (state.ratingSaved > 0) ratingOpen = false }
+    val anime = state.anime
+    Surface(Modifier.fillMaxSize(), color = BackgroundDark) {
+        if (state.isLoading)
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-        } else if (uiState.anime != null) {
-            val anime = uiState.anime!!
-            val isMovie = anime.type.equals("MOVIE", ignoreCase = true)
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 40.dp)
-            ) {
-                // 1. HERO BANNER WITH GRADIENT & NAV BUTTONS
+        else if (anime == null)
+            Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    "Yuklab bo‘lmadi",
+                    state.errorMessage ?: "Anime topilmadi",
+                    actionLabel = "Qayta urinish",
+                    onAction = { viewModel.loadAnimeDetail(slug, isLoggedIn) },
+                )
+            }
+        else
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(360.dp)
-                    ) {
-                        // Poster / Banner Backdrop
+                    Box(Modifier.fillMaxWidth().height(330.dp).background(CardDark)) {
                         AsyncImage(
-                            model = anime.bannerUrl ?: anime.posterUrl,
-                            contentDescription = anime.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            anime.bannerUrl ?: anime.posterUrl,
+                            null,
+                            Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
                         )
-
-                        // Vignette & Bottom fade
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
+                            Modifier.fillMaxSize()
                                 .background(
                                     Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.6f),
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.3f),
                                             Color.Transparent,
-                                            BackgroundDark.copy(alpha = 0.7f),
-                                            BackgroundDark
+                                            BackgroundDark,
                                         )
                                     )
                                 )
                         )
-
-                        // Top Header Actions (Back & Bookmark & Share)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            Modifier.fillMaxWidth()
                                 .statusBarsPadding()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .align(Alignment.TopCenter),
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(
+                            FilledTonalIconButton(
                                 onClick = onBackClick,
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.65f))
+                                colors =
+                                    IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = Color.Black.copy(alpha = 0.5f)
+                                    ),
                             ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Orqaga",
-                                    tint = TextWhite
-                                )
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Orqaga")
                             }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                IconButton(
-                                    onClick = { viewModel.toggleBookmark(slug) },
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                ) {
-                                    Icon(
-                                        imageVector = if (uiState.isBookmarked) Icons.Outlined.BookmarkRemove else Icons.Outlined.BookmarkAdd,
-                                        contentDescription = "Saqlash",
-                                        tint = if (uiState.isBookmarked) PrimaryCyan else TextWhite
-                                    )
-                                }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    val send =
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(
+                                                Intent.EXTRA_TEXT,
+                                                "${anime.title}\nhttps://play.google.com/store/apps/details?id=uz.meduza.anime",
+                                            )
+                                        }
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent.createChooser(send, "Ulashish")
+                                        )
+                                    }
+                                },
+                                colors =
+                                    IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = Color.Black.copy(alpha = 0.5f)
+                                    ),
+                            ) {
+                                Icon(Icons.Outlined.Share, "Ulashish")
                             }
                         }
-
-                        // Poster Overlay & Title preview at bottom of Hero
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomStart)
+                            Modifier.align(Alignment.BottomStart)
                                 .padding(horizontal = 20.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
                         ) {
-                            // Small floating poster card
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .width(100.dp)
-                                    .height(145.dp)
-                                    .border(1.dp, CardDarkElevated, RoundedCornerShape(12.dp))
+                            AsyncImage(
+                                anime.posterUrl,
+                                anime.title,
+                                Modifier.width(94.dp)
+                                    .aspectRatio(0.69f)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                AsyncImage(
-                                    model = anime.posterUrl,
-                                    contentDescription = anime.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-
-                            // Title & badges
-                            Column(modifier = Modifier.weight(1f)) {
-                                val isMovie = anime.type.equals("MOVIE", ignoreCase = true)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(if (isMovie) BadgeMovieCyan else BadgeSeriesRed)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isMovie) "FILM" else "SERIAL",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(PrimaryCyan.copy(alpha = 0.2f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "O'zbekcha Dublyaj",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryCyan
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
                                 Text(
-                                    text = anime.title,
-                                    fontSize = 20.sp,
+                                    if (anime.type == "MOVIE") "FILM" else "SERIAL",
+                                    color = PrimaryCyan,
+                                    fontSize = 11.sp,
+                                    letterSpacing = 2.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextWhite,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
                                 )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.clickable { showRatingDialog = true }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = "Baho",
-                                        tint = StarGold,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = String.format(java.util.Locale.US, "%.1f", anime.rating),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = StarGold
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "(${formatRatingCount(anime.ratingCount)} baho)",
-                                        fontSize = 11.sp,
-                                        color = TextGray
-                                    )
-                                }
+                                Text(
+                                    anime.title,
+                                    color = TextWhite,
+                                    fontSize = 22.sp,
+                                    lineHeight = 27.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 5,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
                 }
-
-                // 2. MAIN CTA BUTTONS (Hozir ko'rish & Treyler)
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Column(
+                        Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
                     ) {
-                        // Play First Episode / Movie Button OR Premiere Pending Button
-                        val firstEp = uiState.episodes.firstOrNull()
-                        val isUpcoming = anime.status.equals("UPCOMING", ignoreCase = true) ||
-                                anime.status.equals("SCHEDULED", ignoreCase = true) ||
-                                (uiState.episodes.isEmpty() && anime.totalReleasedEpisodes == 0)
-
-                        if (firstEp != null) {
-                            Button(
-                                onClick = {
-                                    onEpisodeClick(firstEp.id, slug)
-                                },
-                                modifier = Modifier
-                                    .weight(1.4f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = PrimaryCyan,
-                                    contentColor = Color.Black
-                                )
-                            ) {
-                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isMovie) "Filmni ko'rish" else "Ko'rish (${firstEp.episodeNumber}-qism)",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        } else {
-                            // Upcoming Premiere / No episodes yet Button
-                            Button(
-                                onClick = {
-                                    Toast.makeText(
-                                        context,
-                                        "Ushbu anime premyerasi tez kunda chiqadi. Qismlar joylanishi bilan ko'rishingiz mumkin!",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                    if (!uiState.isBookmarked) {
-                                        viewModel.toggleBookmark(slug)
-                                        Toast.makeText(context, "Kutubxonangizga saqlandi!", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1.4f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = PrimaryCyan.copy(alpha = 0.2f),
-                                    contentColor = PrimaryCyan
-                                )
-                            ) {
-                                Icon(imageVector = Icons.Default.Schedule, contentDescription = "Premyera", modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Premyera kutilmoqda",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-
-                        // Bookmark Button
-                        OutlinedButton(
-                            onClick = { viewModel.toggleBookmark(slug) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (uiState.isBookmarked) PrimaryCyan else TextWhite
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (uiState.isBookmarked) PrimaryCyan else InputBorder
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                "${String.format(Locale.US, "%.1f", anime.rating)} / 10",
+                                color = StarGold,
+                                fontSize = 13.sp,
                             )
+                            Text("${anime.ratingCount} baho", color = TextMuted, fontSize = 13.sp)
+                            anime.year?.let {
+                                Text(it.toString(), color = TextGray, fontSize = 13.sp)
+                            }
+                            anime.ageRating?.let { Text(it, color = TextGray, fontSize = 13.sp) }
+                        }
+                        val first = state.episodes.firstOrNull()
+                        Button(
+                            onClick = {
+                                if (!isLoggedIn) onSignIn()
+                                else if (first != null) onEpisodeClick(first.id, slug)
+                            },
+                            enabled = !isLoggedIn || first != null,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         ) {
                             Icon(
-                                imageVector = if (uiState.isBookmarked) Icons.Default.Check else Icons.Outlined.BookmarkAdd,
-                                contentDescription = "Saqlash",
-                                modifier = Modifier.size(18.dp)
+                                if (isLoggedIn) Icons.Default.PlayArrow else Icons.Outlined.Lock,
+                                null,
+                                Modifier.size(22.dp),
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = if (uiState.isBookmarked) "Saqlangan" else "Saqlash",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
+                                if (!isLoggedIn) "Tomosha qilish uchun kiring"
+                                else if (first == null) "Qismlar tayyorlanmoqda"
+                                else "${first.episodeNumber}-qismdan boshlash",
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
-                    }
-                }
-
-                // 3. SEGMENTED TAB SWITCHER [ QISMLAR ] [ MA'LUMOT ] (Only for TV series)
-                if (!isMovie) {
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 6.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(CardDark)
-                                .padding(4.dp)
-                        ) {
-                            // Tab 0: Qismlar
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (selectedTab == 0) PrimaryCyan else CardDark)
-                                    .clickable { selectedTab = 0 }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (isLoggedIn) viewModel.toggleBookmark(slug) else onSignIn()
+                                },
+                                enabled = !state.isBookmarking,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp),
                             ) {
+                                Icon(
+                                    if (state.isBookmarked) Icons.Outlined.BookmarkAdded
+                                    else Icons.Outlined.BookmarkAdd,
+                                    null,
+                                    Modifier.size(19.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
                                 Text(
-                                    text = "Qismlar (${uiState.episodes.size})",
+                                    if (state.isBookmarked) "Saqlangan" else "Saqlash",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selectedTab == 0) Color.Black else TextGray
                                 )
                             }
-
-                            // Tab 1: Ma'lumot
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (selectedTab == 1) PrimaryCyan else CardDark)
-                                    .clickable { selectedTab = 1 }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
+                            OutlinedButton(
+                                onClick = {
+                                    if (isLoggedIn) {
+                                        selectedScore = state.userRating ?: 8
+                                        viewModel.clearActionError()
+                                        ratingOpen = true
+                                    } else onSignIn()
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp),
                             ) {
+                                Icon(Icons.Outlined.RateReview, null, Modifier.size(19.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Text(
-                                    text = "Tafsilotlar",
+                                    state.userRating?.let { "$it / 10 · Baho" } ?: "Baho berish",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selectedTab == 1) Color.Black else TextGray
                                 )
+                            }
+                        }
+                        if (!ratingOpen) state.actionError?.let { InlineMessage(it) }
+                        Text(
+                            "Anime haqida",
+                            color = TextWhite,
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                        Text(
+                            anime.synopsis ?: "Tavsif hozircha qo‘shilmagan.",
+                            color = TextGray,
+                            fontSize = 14.sp,
+                            lineHeight = 23.sp,
+                            maxLines = if (expanded) Int.MAX_VALUE else 4,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if ((anime.synopsis?.length ?: 0) > 180)
+                            TextButton(
+                                onClick = { expanded = !expanded },
+                                contentPadding = PaddingValues(0.dp),
+                            ) {
+                                Text(if (expanded) "Qisqartirish" else "To‘liq o‘qish")
+                            }
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            anime.genres.forEach { genre ->
+                                Surface(color = CardDark, shape = RoundedCornerShape(8.dp)) {
+                                    Text(
+                                        genre.name,
+                                        color = TextGray,
+                                        fontSize = 12.sp,
+                                        modifier =
+                                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    )
+                                }
                             }
                         }
                     }
                 }
-
-                // 4. TAB CONTENT: QISMLAR (Episodes) - Only for TV series
-                if (!isMovie && selectedTab == 0) {
-                    // Season Selector (if multiple seasons)
-                    if (anime.seasons.size > 1) {
+                item {
+                    TabRow(
+                        selectedTabIndex = tab,
+                        containerColor = BackgroundDark,
+                        contentColor = PrimaryCyan,
+                    ) {
+                        Tab(
+                            tab == 0,
+                            onClick = { if (isLoggedIn) tab = 0 else onSignIn() },
+                            text = { Text(if (isLoggedIn) "Qismlar" else "Qismlar · Kirish") },
+                        )
+                        Tab(tab == 1, onClick = { tab = 1 }, text = { Text("Ma’lumotlar") })
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+                if (tab == 0 && isLoggedIn) {
+                    if (anime.seasons.size > 1)
                         item {
-                            Spacer(modifier = Modifier.height(10.dp))
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items(anime.seasons) { season ->
-                                    val isSelected = uiState.selectedSeason == season.seasonNumber
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(if (isSelected) PrimaryCyan else CardDark)
-                                            .clickable { viewModel.selectSeason(slug, season.seasonNumber) }
-                                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(
-                                            text = "${season.seasonNumber}-Fasl",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) Color.Black else TextGray
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (uiState.episodes.isEmpty()) {
-                        item {
-                            val isUpcoming = anime.status.equals("UPCOMING", ignoreCase = true) ||
-                                    anime.status.equals("SCHEDULED", ignoreCase = true) ||
-                                    (uiState.episodes.isEmpty() && anime.totalReleasedEpisodes == 0)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 36.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(CircleShape)
-                                        .background(PrimaryCyan.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Schedule,
-                                        contentDescription = "Premyera",
-                                        tint = PrimaryCyan,
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Text(
-                                    text = if (isUpcoming) "Premyera tez kunda!" else "Qismlar hali joylanmagan",
-                                    color = TextWhite,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = if (isUpcoming) {
-                                        "Ushbu anime tez kunda Meduza dublyajida premyera qilinadi. Chiqishi bilan tomosha qilish uchun saqlab qo'ying!"
-                                    } else {
-                                        "Ushbu fasl uchun qismlar yuklanmoqda yoki hali joylanmagan."
-                                    },
-                                    color = TextGray,
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center
-                                )
-                                if (isUpcoming && !uiState.isBookmarked) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Button(
+                                    FilterChip(
+                                        selected = state.selectedSeason == season.seasonNumber,
                                         onClick = {
-                                            viewModel.toggleBookmark(slug)
-                                            Toast.makeText(context, "Kutubxonangizga saqlandi!", Toast.LENGTH_SHORT).show()
+                                            viewModel.selectSeason(slug, season.seasonNumber)
                                         },
-                                        shape = RoundedCornerShape(20.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan, contentColor = Color.Black)
-                                    ) {
-                                        Icon(imageVector = Icons.Outlined.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(text = "Sevimlilarga saqlash", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // Episode list section header — shows episode name context
-                            Text(
-                                text = "Barcha qismlar",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextMuted,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        items(uiState.episodes, key = { it.id }) { episode ->
-                            EpisodeItemCard(
-                                episodeNumber = episode.episodeNumber,
-                                title = episode.title,
-                                durationSeconds = episode.duration,
-                                thumbnailUrl = episode.thumbnailUrl ?: anime.posterUrl,
-                                isPremium = episode.isPremium,
-                                onClick = { onEpisodeClick(episode.id, slug) },
-                                style = EpisodeStyle.COMPACT,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                // 5. TAB CONTENT: TAFSILOTLAR (Details & Synopsis)
-                if (isMovie || selectedTab == 1) {
-                    item {
-                        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-                            // Synopsis Title
-                            Text(
-                                text = "Anime haqida",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextWhite
-                            )
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // Synopsis text
-                            if (!anime.synopsis.isNullOrBlank()) {
-                                val isLong = anime.synopsis.length > 140
-                                Column(modifier = Modifier.animateContentSize()) {
-                                    Text(
-                                        text = anime.synopsis,
-                                        fontSize = 13.sp,
-                                        lineHeight = 20.sp,
-                                        color = TextMuted,
-                                        maxLines = if (isSynopsisExpanded || !isLong) Int.MAX_VALUE else 3,
-                                        overflow = TextOverflow.Ellipsis
+                                        label = { Text("${season.seasonNumber}-mavsum") },
                                     )
-                                    if (isLong) {
-                                        Text(
-                                            text = if (isSynopsisExpanded) "Kamroq ko'rsatish" else "Ko'proq o'qish...",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PrimaryCyan,
-                                            modifier = Modifier
-                                                .clickable { isSynopsisExpanded = !isSynopsisExpanded }
-                                                .padding(vertical = 4.dp)
-                                        )
-                                    }
                                 }
                             }
-
-                            Spacer(modifier = Modifier.height(18.dp))
-
-                            // Metadata Grid
-                            Text(
-                                text = "Qo'shimcha ma'lumotlar",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextWhite
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(CardDark)
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                        }
+                    if (state.isLoadingEpisodes)
+                        item {
+                            Box(
+                                Modifier.fillMaxWidth().padding(24.dp),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                MetaRow(label = "Chiqarilgan yili:", value = anime.year?.toString() ?: "2024")
-                                MetaRow(label = "Studiya:", value = anime.studio ?: "Meduza Studio")
-                                MetaRow(label = "Holati:", value = if (anime.status.equals("COMPLETED", true)) "Tugallangan" else "Davom etmoqda")
-                                MetaRow(label = "Tavsiya etilgan yosh:", value = anime.ageRating ?: "16+")
+                                CircularProgressIndicator()
                             }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Genres Chips
-                            Text(
-                                text = "Janrlar",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextWhite
+                        }
+                    else if (state.episodesError != null)
+                        item {
+                            Box(Modifier.padding(20.dp)) {
+                                InlineMessage(state.episodesError!!) {
+                                    viewModel.selectSeason(slug, state.selectedSeason)
+                                }
+                            }
+                        }
+                    else if (state.episodes.isEmpty())
+                        item {
+                            EmptyState(
+                                "Qismlar tayyorlanmoqda",
+                                "Yangi qismlar chiqqanda shu yerda paydo bo‘ladi.",
                             )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(anime.genres) { genre ->
+                        }
+                    else
+                        items(state.episodes, key = { it.id }) { episode ->
+                            Surface(
+                                onClick = { onEpisodeClick(episode.id, slug) },
+                                color = SurfaceDark,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier =
+                                    Modifier.padding(horizontal = 20.dp, vertical = 5.dp)
+                                        .fillMaxWidth(),
+                            ) {
+                                Row(
+                                    Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
                                     Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(CardDarkElevated)
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        Modifier.width(104.dp)
+                                            .aspectRatio(16f / 9f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(CardDark)
+                                    ) {
+                                        AsyncImage(
+                                            episode.thumbnailUrl
+                                                ?: anime.bannerUrl
+                                                ?: anime.posterUrl,
+                                            null,
+                                            Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                        Icon(
+                                            if (episode.isPremium) Icons.Outlined.WorkspacePremium
+                                            else Icons.Default.PlayArrow,
+                                            null,
+                                            Modifier.align(Alignment.Center).size(25.dp),
+                                            tint =
+                                                if (episode.isPremium) PremiumGold else TextWhite,
+                                        )
+                                    }
+                                    Column(
+                                        Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp),
                                     ) {
                                         Text(
-                                            text = genre.name,
-                                            fontSize = 12.sp,
+                                            "${episode.episodeNumber}-qism",
                                             color = PrimaryCyan,
-                                            fontWeight = FontWeight.Medium
+                                            fontSize = 11.sp,
                                         )
+                                        Text(
+                                            episode.title,
+                                            color = TextWhite,
+                                            fontSize = 13.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (episode.duration > 0)
+                                            Text(
+                                                "${episode.duration / 60} daqiqa",
+                                                color = TextMuted,
+                                                fontSize = 11.sp,
+                                            )
                                     }
                                 }
                             }
                         }
+                } else
+                    item {
+                        Column(
+                            Modifier.padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            DetailMetadata(
+                                "Holati",
+                                when (anime.status) {
+                                    "COMPLETED" -> "Tugallangan"
+                                    "UPCOMING",
+                                    "SCHEDULED" -> "Kutilmoqda"
+                                    else -> "Davom etmoqda"
+                                },
+                            )
+                            anime.studio
+                                ?.takeIf { it.isNotBlank() }
+                                ?.let { DetailMetadata("Studiya", it) }
+                            DetailMetadata(
+                                "Format",
+                                if (anime.type == "MOVIE") "Film" else anime.type,
+                            )
+                            if (!isLoggedIn)
+                                InlineMessage(
+                                    "Qismlarni ochish, baholash va tomosha qilish uchun hisobingizga kiring."
+                                )
+                        }
                     }
-                }
             }
-        } else if (uiState.errorMessage != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = uiState.errorMessage!!, color = TextGray, fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { viewModel.loadAnimeDetail(slug) },
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan)
-                    ) {
-                        Text("Qayta yuklash", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
     }
-
-    // Rating Dialog
-    if (showRatingDialog) {
-        var selectedScore by remember { mutableStateOf(10) }
+    if (ratingOpen)
         AlertDialog(
-            onDismissRequest = { showRatingDialog = false },
-            containerColor = CardDark,
-            title = {
-                Text(text = "Animeni baholash", color = TextWhite, fontWeight = FontWeight.Bold)
-            },
+            onDismissRequest = { if (!state.isRating) ratingOpen = false },
+            title = { Text("Sizning bahoyingiz") },
             text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "★ $selectedScore / 10", color = StarGold, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Slider(
-                        value = selectedScore.toFloat(),
-                        onValueChange = { selectedScore = it.toInt() },
-                        valueRange = 1f..10f,
-                        steps = 8,
-                        colors = SliderDefaults.colors(
-                            thumbColor = PrimaryCyan,
-                            activeTrackColor = PrimaryCyan,
-                            inactiveTrackColor = CardDarkElevated
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Anime sizga qanchalik yoqdi?", color = TextGray)
+                    Text(
+                        "$selectedScore / 10",
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryCyan,
                     )
+                    (0..1).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            (1..5).forEach { col ->
+                                val number = row * 5 + col
+                                FilledTonalButton(
+                                    onClick = { selectedScore = number },
+                                    enabled = !state.isRating,
+                                    contentPadding = PaddingValues(0.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors =
+                                        ButtonDefaults.filledTonalButtonColors(
+                                            containerColor =
+                                                if (selectedScore == number) PrimaryCyan
+                                                else CardDarkElevated,
+                                            contentColor =
+                                                if (selectedScore == number) OnPrimary
+                                                else TextWhite,
+                                        ),
+                                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                ) {
+                                    Text(number.toString())
+                                }
+                            }
+                        }
+                    }
+                    state.actionError?.let { Text(it, color = BadgeSeriesRed, fontSize = 12.sp) }
                 }
             },
             confirmButton = {
                 TextButton(
-                    onClick = {
-                        viewModel.rateAnime(slug, selectedScore)
-                        showRatingDialog = false
-                    }
+                    onClick = { viewModel.rateAnime(slug, selectedScore) },
+                    enabled = !state.isRating,
                 ) {
-                    Text("Baholash", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                    Text(if (state.isRating) "Saqlanmoqda…" else "Bahoni saqlash")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRatingDialog = false }) {
-                    Text("Bekor qilish", color = TextGray)
+                TextButton(onClick = { ratingOpen = false }, enabled = !state.isRating) {
+                    Text("Bekor qilish")
                 }
-            }
+            },
         )
-    }
 }
 
 @Composable
-private fun MetaRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, color = TextGray, fontSize = 13.sp)
-        Text(text = value, color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+private fun DetailMetadata(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(label, color = TextMuted, modifier = Modifier.weight(1f), fontSize = 13.sp)
+        Text(value, color = TextWhite, modifier = Modifier.weight(1f), fontSize = 13.sp)
     }
 }
