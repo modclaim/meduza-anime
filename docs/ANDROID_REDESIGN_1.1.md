@@ -21,7 +21,7 @@ Backendga alohida ruxsat bilan faqat app-config funksiyasi qo‘shildi. API kont
 - Postgresda saqlanadi, maxfiy audit ID GET orqali berilmaydi;
 - ilova foregroundda 30 soniyada tekshiradi, xatoda oxirgi tasdiqlangan qiymat saqlanadi.
 
-Bu endpoint amaldagi serverga tarqatilgach boshqaruv ishlaydi. Productionni almashtiradigan yangi backend deploy qilinmagan; migration ajratilgan test bazasida sinovdan o‘tkazilgan. Eski client versiyalari flaglarni o‘qimaydi.
+2026-10-23 kuni endpoint amaldagi serverga alohida qo‘shildi va boshqaruv jonli HTTP so‘rovlari bilan tekshirildi. Migration avval ajratilgan test bazasida sinaldi, so‘ng productionga additive tarzda qo‘llandi. Nexa auth moduli saqlandi. Eski client versiyalari flaglarni o‘qimaydi.
 
 ## Build va qurilma tekshiruvi
 
@@ -34,3 +34,9 @@ Debug ilova `uz.meduza.anime.preview` / **Meduza Preview** sifatida yig‘iladi:
 APK va AAB build natijalari `app/build/outputs/`da. `RedesignRegressionTest` mehmon/video siyosati, texnik ishlar, konfiguratsiya turlari, baholashning xato/muvaffaqiyat holatlari va Premium hisobini tekshiradi. Qo‘shimcha ADB natijalari yakuniy tekshiruv qaydida beriladi.
 
 Muhim: 2026-10-22 tekshiruvida ishlab turgan `/terms` manzili `/privacy` bilan bir xil maxfiylik hujjatini qaytardi. Ilova hujjatlarni to‘g‘ri readerda ochadi; alohida foydalanish shartlarini serverda e’lon qilish kontent egasining vazifasi. Ilovada huquqiy matn o‘ylab yozilmagan.
+
+## 2026-10-23 to‘lov backendi
+
+Android kodi va release binarlari o‘zgarmadi. Serverdagi yashirin demo fallback olib tashlandi, InPAY v2 Hosted Checkout integratsiyasi tarqatildi. `/create` va `/status` Android kontrakti saqlandi. Demo tasdiqlash 410, imzosiz webhook 401. Haqiqiy InPAY holati, summa, valyuta, lokal order metadata va livemode tekshiriladi; Premium berish atomik va takroriy callbackka chidamli.
+
+**Jonli to‘lov hali tayyor emas:** serverdagi eski merchant token v2 tomonidan 401 `invalid_api_key` bilan rad etildi. Meduza kassasining `sk_live_...` kaliti server `.env` ichida `INPAY_SECRET_KEY` sifatida kiritilishi kerak. Shu paytgacha create 503 qaytaradi; demo yaratmaydi. Haqiqiy pul bilan checkout sinovi bajarilmadi.
