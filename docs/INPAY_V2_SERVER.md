@@ -1,6 +1,6 @@
 # Meduza InPAY v2 — 2026-10-23
 
-Backend kodi serverga joylashtirildi. Android ilova kodi va APK/AAB o‘zgartirilmadi. Jonli checkout uchun credential bosqichi tugallanmagan.
+Backend kodi serverga joylashtirildi. Android ilova kodi va APK/AAB o‘zgartirilmadi. Jonli v2 kalit serverga o‘rnatildi va InPAY tomonidan qabul qilindi. Hozir checkout uchun bloklovchi omil — Meduza domenining InPAY whitelist ro‘yxatida yo‘qligi.
 
 ## Sabab va tuzatish
 
@@ -24,7 +24,9 @@ INPAY_WEBHOOK_SECRET=<whsec_ webhook siri>
 
 Bu placeholderlarni amaldagi qiymat sifatida saqlamang. Kalitni chatga, Gitga, ZIPga yoki frontendga qo‘ymang. `.env` ruxsati 0600 bo‘lsin. Kalit qo‘yilgach faqat `pm2 restart meduza-api` bajariladi. Asosiy API, botlar yoki Nginxni umumiy restart qilish shart emas.
 
-Hozir serverda faqat eski merchant token bor; v1 authorization muvaffaqiyatli, v2 balance va webhook secret so‘rovlari 401 `invalid_api_key`. Meduza fayllarida v2 live key topilmadi. Shu sabab yangi create hozir 503; haqiqiy invoice yaratilishi tekshirilmagan.
+Dastlab serverdagi eski merchant token v2 tomonidan 401 `invalid_api_key` bilan rad etildi. Foydalanuvchi bergan yangi jonli v2 kalit keyin faqat server `.env` fayliga o‘rnatildi (0600); boshqa konfiguratsiya qiymatlari saqlandi. InPAY `GET balance/` 200 va `livemode:true`, `GET webhooks/secret/` 200 qaytardi. Faqat `meduza-api` restart qilindi.
+
+`POST payments/` esa 400 `domain_not_whitelisted`, `param:return_url` qaytardi: `meduza.nexa.uz` domeni merchant kabinetidagi `/merchant/whitelist/` ro‘yxatida ruxsat etilmagan. Meduza API buni clientga xavfsiz 503 sifatida qaytaradi, demo yaratmaydi. Kalitning yaroqliligi tasdiqlandi, lekin haqiqiy invoice va uning cancel/settlement sinovi domen ruxsati sabab tugallanmagan. Whitelist himoyasi chetlab o‘tilmadi.
 
 ## Webhook va Premium
 
@@ -41,7 +43,8 @@ Kassa yaratilib, DBga yozish ishlamasa invoice bekor qilishga urinish bor. Prova
 - Public server uchun 18 ta tekshiruv; health/katalog/tarif/app-config 200, demo 410, barcha unsigned webhook aliaslar 401. Android APK hash saqlandi, boshqa servis PIDlari o‘zgarmadi.
 - Yangi sahifaning JavaScripti compile va holat testlaridan o‘tdi. 320 px brauzer kengligida gorizontal overflow yo‘q.
 - Bazadagi 19 paymentning 3 ta success yozuvida provider ID yo‘q. Ular eski demo yoki qo‘lda tasdiqlashdan bo‘lishi mumkin; haqiqiy xaridlarni xato bekor qilmaslik uchun avtomatik revoke qilinmadi.
-- Jonli kalit kiritilgach: mavjud tarifda invoice yaratish, live checkout URL/metadata/summa holatini tekshirish va pul yechmasdan cancel qilish; keyin haqiqiy foydalanuvchi to‘lovi bilan biznes qabul sinovi kerak.
+- Kalit o‘rnatilgach: balance va webhook secret 200, live mode tasdiqlandi. Invoice yaratish domen whitelist sabab 400 bilan bloklandi; invoice yaratilmagan va pul yechilmagan.
+- `meduza.nexa.uz` Meduza kassasining whitelist ro‘yxatiga qo‘shilgach: mavjud tarifda invoice yaratish, live checkout URL/metadata/summa holatini tekshirish va pul yechmasdan cancel qilish; keyin haqiqiy foydalanuvchi to‘lovi bilan biznes qabul sinovi kerak.
 
 ## Tarqatish va qaytarish
 
@@ -50,3 +53,5 @@ Amaldagi Nexa backendini butun lokal API bilan almashtirmang. Server to‘lov mo
 Private server backup: `/home/ubuntu/.meduza-deploy/20261023-inpay-v2-001/backup`. Oldingi app-config deploy: `/home/ubuntu/.meduza-deploy/20261023-app-config-001`. Bu backuplarda maxfiy konfiguratsiya bor; ularni public/Gitga chiqarmang. Eski payment moduliga rollback demo zaifligini qaytarishi mumkin, shuning uchun zaruratda payment create uchun maintenance javobini afzal ko‘ring.
 
 Oldingi server sourceida hardkodlangan credentiallar diagnostika chiqishiga tushgan edi. Active qiymatlar src/dist va example/wrangler konfiguratsiyasidan olib tashlandi; .envda qolgan. Koordinatsiyalangan DB va eski InPAY credential rotation hali bajarilmagan.
+
+Yangi API v2 kaliti foydalanuvchi tomonidan chatga yuborilgan. Production xavfsizligi uchun integratsiya tekshiruvi tugagach bu kalitni merchant kabinetida almashtirish va yangi qiymatni faqat server muhitida saqlash kerak. Kalitning o‘zi hujjat, Git yoki paketga kiritilmagan.

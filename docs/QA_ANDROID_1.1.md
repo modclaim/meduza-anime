@@ -42,6 +42,6 @@ Kichik viewport qo‘shimcha sinovi: 640×1280, density 320 (320dp kenglik), 125
 - InPAY v2 backendi serverga tarqatildi. Mahalliy API to‘plami: **51/51**, skip yoki xato yo‘q. Ikkita ajratilgan PostgreSQL konteynerida app-config va payment settlement tekshirildi.
 - Payment SQL: bitta invoice uchun 20 parallel callback faqat bir marta kun qo‘shadi; ikkita alohida invoice bir foydalanuvchining muddatini to‘g‘ri qo‘shadi. User update xatosi payment statusini ham rollback qiladi.
 - Server candidate: 19 ta fixture HTTP tekshiruvi, production bazaga payment yozilmagan. Public server: 18 ta tekshiruv; demo 410, unsigned callbacklar 401, oversized 413, noto‘g‘ri Content-Type 415.
-- Live v2 credential yo‘q. Mavjud eski token v1 authdan o‘tadi, ammo v2 401 `invalid_api_key` qaytaradi. Haqiqiy checkout/pul yechish tekshirilmadi; live create 503 qaytarishi tasdiqlandi.
+- Jonli v2 kalit keyin serverga o‘rnatildi. InPAY balance va webhook secret 200, `livemode:true` tasdiqlandi. Invoice yaratish `400 domain_not_whitelisted` bilan bloklandi (`meduza.nexa.uz`, `return_url`). Meduza create 503 qaytaradi; invoice yaratilmagan va pul yechilmagan. Domen ruxsati kiritilgach live checkout/cancel tekshiruvi qoladi.
 - 320×640 brauzer viewportida yangi return sahifasining scrollWidth qiymati 320; karta va tekshirish tugmasi ekranga sig‘di. Pending/success/failed/retry matnlari skript orqali tekshirildi.
 - Faqat `meduza-api` restart qilindi. Boshqa PM2 process PIDlari, APK, Nexa auth, mavjud DB sxemalari va himoyalangan fayl hashlarida o‘zgarish yo‘q.
