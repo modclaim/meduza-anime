@@ -1,6 +1,6 @@
 # Meduza InPAY v2 — 2026-10-23
 
-Backend kodi serverga joylashtirildi. Android ilova kodi va APK/AAB o‘zgartirilmadi. Jonli v2 kalit serverga o‘rnatildi va InPAY tomonidan qabul qilindi. Hozir checkout uchun bloklovchi omil — Meduza domenining InPAY whitelist ro‘yxatida yo‘qligi.
+Backend kodi serverga joylashtirildi. Android ilova kodi va APK/AAB o‘zgartirilmadi. Jonli v2 kalit serverga o‘rnatildi va InPAY tomonidan qabul qilindi. Domen whitelist sozlangach jonli invoice yaratish, provider holati, haqiqiy webhook yetkazilishi va pul yechmasdan cancel qilish tekshiruvlari muvaffaqiyatli yakunlandi. Haqiqiy pulli xariddan keyingi Premium faollashuvi hali biznes qabul sinovida tekshirilishi kerak.
 
 ## Sabab va tuzatish
 
@@ -26,7 +26,9 @@ Bu placeholderlarni amaldagi qiymat sifatida saqlamang. Kalitni chatga, Gitga, Z
 
 Dastlab serverdagi eski merchant token v2 tomonidan 401 `invalid_api_key` bilan rad etildi. Foydalanuvchi bergan yangi jonli v2 kalit keyin faqat server `.env` fayliga o‘rnatildi (0600); boshqa konfiguratsiya qiymatlari saqlandi. InPAY `GET balance/` 200 va `livemode:true`, `GET webhooks/secret/` 200 qaytardi. Faqat `meduza-api` restart qilindi.
 
-`POST payments/` esa 400 `domain_not_whitelisted`, `param:return_url` qaytardi: `meduza.nexa.uz` domeni merchant kabinetidagi `/merchant/whitelist/` ro‘yxatida ruxsat etilmagan. Meduza API buni clientga xavfsiz 503 sifatida qaytaradi, demo yaratmaydi. Kalitning yaroqliligi tasdiqlandi, lekin haqiqiy invoice va uning cancel/settlement sinovi domen ruxsati sabab tugallanmagan. Whitelist himoyasi chetlab o‘tilmadi.
+Dastlab `POST payments/` 400 `domain_not_whitelisted`, `param:return_url` qaytardi. Foydalanuvchi whitelistni sozlagach ayni Meduza API orqali `POST /payments/create` 201 qaytardi: live checkout, summa, UZS va order metadata mosligi tekshirildi. Imzolangan “success” xabari ham providerda hali to‘lanmagan invoicega Premium bermasligi jonli serverda tasdiqlandi.
+
+Providerning amaldagi hujjatiga muvofiq cancel manzili `POST https://inpay.uz/api/v2/payments/{id}/cancel`. Lokal eski `llms.txt`dagi `payments/cancel` 404 qaytardi. Client yangi manzilga yangilandi, regression test avval xatoni tutdi va tuzatishdan keyin o‘tdi. Faqat InpayClient source/runtime fayllari alohida backup bilan serverga tarqatildi. Sinov invoice’lari `requires_payment_method` → `canceled`, Meduza statusi `failed` bo‘lishi tekshirildi. Pul yechilmadi.
 
 ## Webhook va Premium
 
@@ -43,8 +45,10 @@ Kassa yaratilib, DBga yozish ishlamasa invoice bekor qilishga urinish bor. Prova
 - Public server uchun 18 ta tekshiruv; health/katalog/tarif/app-config 200, demo 410, barcha unsigned webhook aliaslar 401. Android APK hash saqlandi, boshqa servis PIDlari o‘zgarmadi.
 - Yangi sahifaning JavaScripti compile va holat testlaridan o‘tdi. 320 px brauzer kengligida gorizontal overflow yo‘q.
 - Bazadagi 19 paymentning 3 ta success yozuvida provider ID yo‘q. Ular eski demo yoki qo‘lda tasdiqlashdan bo‘lishi mumkin; haqiqiy xaridlarni xato bekor qilmaslik uchun avtomatik revoke qilinmadi.
-- Kalit o‘rnatilgach: balance va webhook secret 200, live mode tasdiqlandi. Invoice yaratish domen whitelist sabab 400 bilan bloklandi; invoice yaratilmagan va pul yechilmagan.
-- `meduza.nexa.uz` Meduza kassasining whitelist ro‘yxatiga qo‘shilgach: mavjud tarifda invoice yaratish, live checkout URL/metadata/summa holatini tekshirish va pul yechmasdan cancel qilish; keyin haqiqiy foydalanuvchi to‘lovi bilan biznes qabul sinovi kerak.
+- Whitelist sozlangach 21 ta public jonli tekshiruv muvaffaqiyatli o‘tdi: real create 201, live status/metadata/summa, merchant HMAC, unpaid invoicega Premium bermaslik, cancel va app-config saqlanishi.
+- InPAY webhook jurnalida `payment.created` va `payment.canceled` hodisalari `delivered`, HTTP 200, bir urinishda yetkazilgan deb ko‘rsatildi.
+- Cancel URL tuzatishidan so‘ng to‘lov va xavfsizlik bo‘yicha 42/42 test o‘tdi, skip yo‘q. SQL o‘zgarmadi; oldingi to‘liq 51/51 va haqiqiy PostgreSQL concurrency/rollback dalillari saqlandi.
+- Haqiqiy karta bilan to‘lash va undan keyingi Premium faollashuvi biznes qabul sinovida hali bajarilmagan. Sinovlarda pul yechilmadi.
 
 ## Tarqatish va qaytarish
 
@@ -55,3 +59,5 @@ Private server backup: `/home/ubuntu/.meduza-deploy/20261023-inpay-v2-001/backup
 Oldingi server sourceida hardkodlangan credentiallar diagnostika chiqishiga tushgan edi. Active qiymatlar src/dist va example/wrangler konfiguratsiyasidan olib tashlandi; .envda qolgan. Koordinatsiyalangan DB va eski InPAY credential rotation hali bajarilmagan.
 
 Yangi API v2 kaliti foydalanuvchi tomonidan chatga yuborilgan. Production xavfsizligi uchun integratsiya tekshiruvi tugagach bu kalitni merchant kabinetida almashtirish va yangi qiymatni faqat server muhitida saqlash kerak. Kalitning o‘zi hujjat, Git yoki paketga kiritilmagan.
+
+Amaldagi cancel manzili uchun birlamchi manba: https://inpay.uz/api/v2/ (2026-10-23 jonli HTML hujjati). Serverdan olingan yangi hujjat eski web cache va lokal llms.txt dan farq qildi.
